@@ -1,0 +1,610 @@
+package wrapper
+
+import (
+	//"log/slog"
+	"time"
+
+	"github.com/rs/zerolog/log"
+	"github.com/scmhub/ibapi"
+	"github.com/scmhub/ibapi/protobuf"
+)
+
+// Compile-time check to ensure Wrapper saitisfies ibapi.Ewrapper
+var _ ibapi.EWrapper = (*Wrapper)(nil)
+
+// Wrapper is the default implementation of the EWrapper interface.
+type Wrapper struct{}
+
+//func NewWrapper(logger *slog.Logger) *Wrapper {
+//	return &Wrapper{log: logger}
+//}
+
+func (w Wrapper) TickPrice(reqID ibapi.TickerID, tickType ibapi.TickType, price float64, attrib ibapi.TickAttrib) {
+	log.Info().Int64("ReqID", reqID).Int64("TickType", tickType).Str("Price", ibapi.FloatMaxString(price)).Bool("CanAutoExecute", attrib.CanAutoExecute).Bool("PastLimit", attrib.PastLimit).Bool("PreOpen", attrib.PreOpen).Msg("<TickPrice>")
+}
+
+func (w Wrapper) TickSize(reqID ibapi.TickerID, tickType ibapi.TickType, size ibapi.Decimal) {
+	log.Info().Int64("ReqID", reqID).Int64("TickType", tickType).Str("Size", ibapi.DecimalMaxString(size)).Msg("<TickSize>")
+}
+
+func (w Wrapper) TickOptionComputation(reqID ibapi.TickerID, tickType ibapi.TickType, tickAttrib int64, impliedVol float64, delta float64, optPrice float64, pvDividend float64, gamma float64, vega float64, theta float64, undPrice float64) {
+	logger := log.Info().Int64("ReqID", reqID).Int64("TickType", tickType).Str("TickAttrib", ibapi.IntMaxString(tickAttrib)).Str("ImpliedVol", ibapi.FloatMaxString(impliedVol)).Str("Delta", ibapi.FloatMaxString(delta))
+	logger = logger.Str("OptPrice", ibapi.FloatMaxString(optPrice)).Str("PvDividend", ibapi.FloatMaxString(pvDividend)).Str("Gamma", ibapi.FloatMaxString(gamma)).Str("Vega", ibapi.FloatMaxString(vega)).Str("Theta", ibapi.FloatMaxString(theta)).Str("UndPrice", ibapi.FloatMaxString(undPrice))
+	logger.Msg("<TickOptionComputation>")
+}
+
+func (w Wrapper) TickGeneric(reqID ibapi.TickerID, tickType ibapi.TickType, value float64) {
+	log.Info().Int64("ReqID", reqID).Int64("TickType", tickType).Str("Value", ibapi.FloatMaxString(value)).Msg("<TickGeneric>")
+}
+
+func (w Wrapper) TickString(reqID ibapi.TickerID, tickType ibapi.TickType, value string) {
+	log.Info().Int64("ReqID", reqID).Int64("TickType", tickType).Str("Value", value).Msg("<TickString>")
+}
+
+func (w Wrapper) TickEFP(reqID ibapi.TickerID, tickType ibapi.TickType, basisPoints float64, formattedBasisPoints string, totalDividends float64, holdDays int64, futureLastTradeDate string, dividendImpact float64, dividendsToLastTradeDate float64) {
+	logger := log.Info().Int64("ReqID", reqID).Int64("TickType", tickType).Float64("BasisPoints", basisPoints).Str("FormattedBasisPoints", formattedBasisPoints).Float64("TotalDividends", totalDividends)
+	logger = logger.Int64("holdDays", holdDays).Str("FutureLastTradeDate", futureLastTradeDate).Float64("DividendImpact", dividendImpact).Float64("DividendsToLastTradeDate", dividendsToLastTradeDate)
+	logger.Msg("<TickEFP>")
+}
+
+func (w Wrapper) OrderStatus(orderID ibapi.OrderID, status string, filled ibapi.Decimal, remaining ibapi.Decimal, avgFillPrice float64, permID int64, parentID int64, lastFillPrice float64, clientID int64, whyHeld string, mktCapPrice float64) {
+	logger := log.Info().Int64("OrderID", orderID).Str("Status", status).Str("Filled", ibapi.DecimalMaxString(filled)).Stringer("Remaining", remaining).Float64("AvgFillPrice", avgFillPrice)
+	logger = logger.Int64("PermID", permID).Int64("ParentID", parentID).Float64("LastFillPrice", lastFillPrice).Int64("ClientID", clientID).Str("WhyHeld", whyHeld).Float64("MktCapPrice", mktCapPrice)
+	logger.Msg("<OrderStatus>")
+}
+
+func (w Wrapper) OpenOrder(orderID ibapi.OrderID, contract *ibapi.Contract, order *ibapi.Order, orderState *ibapi.OrderState) {
+	logger := log.Info().Str("PermID", ibapi.LongMaxString(order.PermID)).Str("ClientID", ibapi.IntMaxString(order.ClientID)).Str("OrderID", ibapi.IntMaxString(order.OrderID))
+	logger = logger.Str("Account", order.Account).Str("Symbol", contract.Symbol).Str("SecType", contract.SecType)
+	logger = logger.Str("Exchange", contract.Exchange).Float64("Strike", contract.Strike).Str("Action", order.Action).Str("OrderType", order.OrderType)
+	logger = logger.Str("TotalQuantity", ibapi.DecimalMaxString(order.TotalQuantity)).Str("CashQty", ibapi.FloatMaxString(order.CashQty))
+	logger = logger.Str("LmtPrice", ibapi.FloatMaxString(order.LmtPrice)).Str("AuxPrice", ibapi.FloatMaxString(order.AuxPrice)).Str("Status", orderState.Status)
+	logger = logger.Str("MinTradeQty", ibapi.IntMaxString(order.MinTradeQty)).Str("MinCompeteSize", ibapi.IntMaxString(order.MinCompeteSize))
+	if order.CompeteAgainstBestOffset == ibapi.COMPETE_AGAINST_BEST_OFFSET_UP_TO_MID {
+		logger = logger.Str("CompeteAgainstBestOffset", "UpToMid")
+	} else {
+		logger = logger.Str("CompeteAgainstBestOffset", ibapi.FloatMaxString(order.CompeteAgainstBestOffset))
+	}
+	logger = logger.Str("MidOffsetAtWhole", ibapi.FloatMaxString(order.MidOffsetAtWhole)).Str("MidOffsetAtHalf", ibapi.FloatMaxString(order.MidOffsetAtHalf))
+	logger = logger.Str("FAGroup", order.FAGroup).Str("CustomerAccount", order.CustomerAccount).Bool("ProfessionalCustomer", order.ProfessionalCustomer)
+	logger = logger.Str("ManualOrderIndicator", ibapi.IntMaxString(order.ManualOrderIndicator)).Str("Submitter", order.Submitter).Bool("ImbalanceOnly", order.ImbalanceOnly)
+	logger.Msg("<OpenOrder>")
+}
+
+func (w Wrapper) OpenOrderEnd() {
+	log.Info().Msg("<OpenOrderEnd>")
+}
+
+func (w Wrapper) WinError(text string, lastError int64) {
+	log.Info().Str("Text", text).Int64("LastError", lastError).Msg("<WinError>")
+}
+
+func (w Wrapper) ConnectionClosed() {
+	log.Info().Msg("<ConnectionClosed>...")
+}
+
+func (w Wrapper) UpdateAccountValue(tag string, value string, currency string, accountName string) {
+	log.Info().Str("Tag", tag).Str("Value", value).Str("Currency", currency).Str("AccountName", accountName).Msg("<UpdateAccountValue>")
+}
+
+func (w Wrapper) UpdatePortfolio(contract *ibapi.Contract, position ibapi.Decimal, marketPrice float64, marketValue float64, averageCost float64, unrealizedPNL float64, realizedPNL float64, accountName string) {
+	logger := log.Info().Str("Symbol", contract.Symbol).Str("SecType", contract.SecType).Str("Exchange", contract.Exchange).Str("Position", ibapi.DecimalMaxString(position))
+	logger = logger.Str("MarketPrice", ibapi.FloatMaxString(marketPrice)).Str("MarketValue", ibapi.FloatMaxString(marketValue)).Str("AverageCost", ibapi.FloatMaxString(averageCost)).Str("UnrealizedPNL", ibapi.FloatMaxString(unrealizedPNL)).Str("RealizedPNL", ibapi.FloatMaxString(realizedPNL)).Str("AccountName", accountName)
+	logger.Msg("<UpdatePortfolio>")
+}
+
+func (w Wrapper) UpdateAccountTime(timeStamp string) {
+	log.Info().Str("TimeStamp", timeStamp).Msg("<UpdateAccountTime>")
+}
+
+func (w Wrapper) AccountDownloadEnd(accountName string) {
+	log.Info().Str("AccountName", accountName).Msg("<AccountDownloadEnd>")
+}
+
+func (w Wrapper) NextValidID(reqID int64) {
+	log.Info().Int64("ReqID", reqID).Msg("<NextValidID>")
+}
+
+func (w Wrapper) ContractDetails(reqID int64, contractDetails *ibapi.ContractDetails) {
+	log.Info().Int64("ReqID", reqID).Stringer("ContractDetails", contractDetails).Msg("<ContractDetails>")
+}
+
+func (w Wrapper) BondContractDetails(reqID int64, contractDetails *ibapi.ContractDetails) {
+	log.Info().Int64("ReqID", reqID).Stringer("ContractDetails", contractDetails).Msg("<BondContractDetails>")
+}
+
+func (w Wrapper) ContractDetailsEnd(reqID int64) {
+	log.Info().Int64("ReqID", reqID).Msg("<ContractDetailsEnd>")
+}
+
+func (w Wrapper) ExecDetails(reqID int64, contract *ibapi.Contract, execution *ibapi.Execution) {
+	log.Info().Int64("ReqID", reqID).Stringer("Contract", contract).Stringer("Execution", execution).Msg("<ExecDetails>")
+}
+
+func (w Wrapper) ExecDetailsEnd(reqID int64) {
+	log.Info().Int64("ReqID", reqID).Msg("<ExecDetailsEnd>")
+}
+
+func (w Wrapper) Error(reqID ibapi.TickerID, errorTime int64, errCode int64, errString string, advancedOrderRejectJson string) {
+	logger := log.Error().Int64("ReqID", reqID).Int64("ErrorTime", errorTime).Int64("ErrCode", errCode).Str("ErrString", errString)
+	if advancedOrderRejectJson != "" {
+		logger = logger.Str("AdvancedOrderRejectJson", advancedOrderRejectJson)
+	}
+	logger.Msg("<Error>")
+}
+
+func (w Wrapper) UpdateMktDepth(TickerID ibapi.TickerID, position int64, operation int64, side int64, price float64, size ibapi.Decimal) {
+	log.Info().Int64("TickerID", TickerID).Int64("Position", position).Int64("Operation", operation).Int64("Side", side).Str("Price", ibapi.FloatMaxString(price)).Str("Size", ibapi.DecimalMaxString(size)).Msg("<UpdateMktDepth>")
+}
+
+func (w Wrapper) UpdateMktDepthL2(TickerID ibapi.TickerID, position int64, marketMaker string, operation int64, side int64, price float64, size ibapi.Decimal, isSmartDepth bool) {
+	log.Info().Int64("TickerID", TickerID).Int64("Position", position).Str("MarketMaker", marketMaker).Int64("Operation", operation).Int64("Side", side).Str("Price", ibapi.FloatMaxString(price)).Str("Size", ibapi.DecimalMaxString(size)).Bool("IsSmartDepth", isSmartDepth).Msg("<UpdateMktDepthL2>")
+}
+
+func (w Wrapper) UpdateNewsBulletin(msgID int64, msgType int64, newsMessage string, originExch string) {
+	log.Info().Int64("msgID", msgID).Int64("MsgType", msgType).Str("NewsMessage", newsMessage).Str("OriginExch", originExch).Msg("<UpdateNewsBulletin>")
+}
+
+func (w Wrapper) ManagedAccounts(accountsList []string) {
+	log.Info().Strs("AccountsList", accountsList).Msg("<ManagedAccounts>")
+}
+
+func (w Wrapper) ReceiveFA(faDataType ibapi.FaDataType, cxml string) {
+	log.Info().Stringer("FaDataType", faDataType).Str("Cxml", cxml).Msg("<ReceiveFA>")
+}
+
+func (w Wrapper) HistoricalData(reqID int64, bar *ibapi.Bar) {
+	log.Info().Int64("ReqID", reqID).Stringer("Bar", bar).Msg("<HistoricalData>")
+}
+
+func (w Wrapper) HistoricalDataEnd(reqID int64, startDateStr string, endDateStr string) {
+	log.Info().Int64("ReqID", reqID).Str("StartDateStr", startDateStr).Str("EndDateStr", endDateStr).Msg("<HistoricalDataEnd>")
+}
+
+func (w Wrapper) ScannerParameters(xml string) {
+	log.Info().Str("Xml", xml[:50]).Msg("<ScannerParameters>")
+}
+
+func (w Wrapper) ScannerData(reqID int64, rank int64, contractDetails *ibapi.ContractDetails, distance string, benchmark string, projection string, legsStr string) {
+	log.Info().Int64("ReqID", reqID).Int64("Rank", rank).Stringer("ContractDetails", contractDetails).Str("Distance", distance).Str("Benchmark", benchmark).Str("Projection", projection).Str("LegsStr", legsStr).Msg("<ScannerData>")
+}
+
+func (w Wrapper) ScannerDataEnd(reqID int64) {
+	log.Info().Int64("ReqID", reqID).Msg("<ScannerDataEnd>")
+}
+
+func (w Wrapper) RealtimeBar(reqID int64, time int64, open float64, high float64, low float64, close float64, volume ibapi.Decimal, wap ibapi.Decimal, count int64) {
+	log.Info().Int64("ReqID", reqID).Int64("Bar time", time).Float64("Open", open).Float64("High", high).Float64("Low", low).Float64("Close", close).Stringer("Volume", volume).Stringer("Wap", wap).Int64("Count", count).Msg("<RealtimeBar>")
+}
+
+func (w Wrapper) CurrentTime(t int64) {
+	log.Info().Time("Server Time", time.Unix(t, 0)).Msg("<CurrentTime>")
+}
+
+func (w Wrapper) FundamentalData(reqID int64, data string) {
+	log.Info().Int64("ReqID", reqID).Str("Data", data).Msg("<FundamentalData>")
+}
+
+func (w Wrapper) DeltaNeutralValidation(reqID int64, deltaNeutralContract ibapi.DeltaNeutralContract) {
+	log.Info().Int64("ReqID", reqID).Stringer("DeltaNeutralContract", deltaNeutralContract).Msg("<DeltaNeutralValidation>")
+}
+
+func (w Wrapper) TickSnapshotEnd(reqID int64) {
+	log.Info().Int64("ReqID", reqID).Msg("<TickSnapshotEnd>")
+}
+
+func (w Wrapper) MarketDataType(reqID int64, marketDataType int64) {
+	log.Info().Int64("ReqID", reqID).Int64("MarketDataType", marketDataType).Msg("<MarketDataType>")
+}
+
+func (w Wrapper) CommissionAndFeesReport(commissionAndFeesReport ibapi.CommissionAndFeesReport) {
+	log.Info().Stringer("CommissionAndFeesReport", commissionAndFeesReport).Msg("<CommissionAndFeesReport>")
+}
+
+func (w Wrapper) Position(account string, contract *ibapi.Contract, position ibapi.Decimal, avgCost float64) {
+	log.Info().Str("Account", account).Stringer("Contract", contract).Str("Position", ibapi.DecimalMaxString(position)).Str("AvgCost", ibapi.FloatMaxString(avgCost)).Msg("<Position>")
+}
+
+func (w Wrapper) PositionEnd() {
+	log.Info().Msg("<PositionEnd>")
+}
+
+func (w Wrapper) AccountSummary(reqID int64, account string, tag string, value string, currency string) {
+	log.Info().Int64("ReqID", reqID).Str("Account", account).Str("Tag", tag).Str("Value", value).Str("Currency", currency).Msg("<AccountSummary>")
+}
+
+func (w Wrapper) AccountSummaryEnd(reqID int64) {
+	log.Info().Int64("ReqID", reqID).Msg("<AccountSummaryEnd>")
+}
+
+func (w Wrapper) VerifyMessageAPI(apiData string) {
+	log.Info().Str("ApiData", apiData).Msg("<VerifyMessageAPI>")
+}
+
+func (w Wrapper) VerifyCompleted(isSuccessful bool, errorText string) {
+	log.Info().Bool("IsSuccessful", isSuccessful).Str("ErrorText", errorText).Msg("<VerifyCompleted>")
+}
+
+func (w Wrapper) DisplayGroupList(reqID int64, groups string) {
+	log.Info().Int64("ReqID", reqID).Str("Groups", groups).Msg("<DisplayGroupList>")
+}
+
+func (w Wrapper) DisplayGroupUpdated(reqID int64, contractInfo string) {
+	log.Info().Int64("ReqID", reqID).Str("ContractInfo", contractInfo).Msg("<DisplayGroupUpdated>")
+}
+
+func (w Wrapper) VerifyAndAuthMessageAPI(apiData string, xyzChallange string) {
+	log.Info().Str("ApiData", apiData).Str("XyzChallange", xyzChallange).Msg("<VerifyAndAuthMessageAPI>")
+}
+
+func (w Wrapper) VerifyAndAuthCompleted(isSuccessful bool, errorText string) {
+	log.Info().Bool("IsSuccessful", isSuccessful).Str("ErrorText", errorText).Msg("<VerifyAndAuthCompleted>")
+}
+
+func (w Wrapper) ConnectAck() {
+	log.Info().Msg("<ConnectAck>...")
+}
+
+func (w Wrapper) PositionMulti(reqID int64, account string, modelCode string, contract *ibapi.Contract, pos ibapi.Decimal, avgCost float64) {
+	log.Info().Int64("ReqID", reqID).Str("Account", account).Str("ModelCode", modelCode).Stringer("Contract", contract).Str("Position", ibapi.DecimalMaxString(pos)).Str("AvgCost", ibapi.FloatMaxString(avgCost)).Msg("<PositionMulti>")
+}
+
+func (w Wrapper) PositionMultiEnd(reqID int64) {
+	log.Info().Int64("ReqID", reqID).Msg("<PositionMultiEnd>")
+}
+
+func (w Wrapper) AccountUpdateMulti(reqID int64, account string, modelCode string, key string, value string, currency string) {
+	log.Info().Int64("ReqID", reqID).Str("Account", account).Str("ModelCode", modelCode).Str("Key", key).Str("Value", value).Str("Currency", currency).Msg("<AccountUpdateMulti>")
+}
+
+func (w Wrapper) AccountUpdateMultiEnd(reqID int64) {
+	log.Info().Int64("ReqID", reqID).Msg("<AccountUpdateMultiEnd>")
+}
+
+func (w Wrapper) SecurityDefinitionOptionParameter(reqID int64, exchange string, underlyingConID int64, tradingClass string, multiplier string, expirations []string, strikes []float64) {
+	log.Info().Int64("ReqID", reqID).Str("Exchange", exchange).Str("UnderlyingConID", ibapi.IntMaxString(underlyingConID)).Str("TradingClass", tradingClass).Str("Multiplier", multiplier).Strs("Expirations", expirations).Floats64("Strikes", strikes).Msg("<SecurityDefinitionOptionParameter>")
+}
+
+func (w Wrapper) SecurityDefinitionOptionParameterEnd(reqID int64) {
+	log.Info().Int64("ReqID", reqID).Msg("<SecurityDefinitionOptionParameterEnd>")
+}
+
+func (w Wrapper) SoftDollarTiers(reqID int64, tiers []ibapi.SoftDollarTier) {
+	for _, sdt := range tiers {
+		log.Info().Int64("ReqID", reqID).Stringer("SoftDollarTier", sdt).Msg("<SoftDollarTiers>")
+	}
+}
+
+func (w Wrapper) FamilyCodes(familyCodes []ibapi.FamilyCode) {
+	for _, fc := range familyCodes {
+		log.Info().Stringer("FamilyCode", fc).Msg("<FamilyCodes>")
+	}
+}
+
+func (w Wrapper) SymbolSamples(reqID int64, contractDescriptions []ibapi.ContractDescription) {
+	log.Info().Int("Nb samples", len(contractDescriptions)).Int64("ReqID", reqID).Msg("<SymbolSamples>")
+	for i, cd := range contractDescriptions {
+		log.Info().Stringer("Contract", cd.Contract).Msgf("<Sample %v>", i)
+	}
+}
+
+func (w Wrapper) MktDepthExchanges(depthMktDataDescriptions []ibapi.DepthMktDataDescription) {
+	log.Info().Any("DepthMktDataDescriptions", depthMktDataDescriptions).Msg("<MktDepthExchanges>")
+}
+
+func (w Wrapper) TickNews(TickerID ibapi.TickerID, timeStamp int64, providerCode string, articleID string, headline string, extraData string) {
+	log.Info().Int64("TickerID", TickerID).Str("TimeStamp", ibapi.IntMaxString(timeStamp)).Str("ProviderCode", providerCode).Str("ArticleID", articleID).Str("Headline", headline).Str("ExtraData", extraData).Msg("<TickNews>")
+}
+
+func (w Wrapper) SmartComponents(reqID int64, smartComponents []ibapi.SmartComponent) {
+	log.Info().Int64("ReqID", reqID).Msg("<SmartComponents>")
+	for i, sc := range smartComponents {
+		log.Info().Stringer("SmartComponent", sc).Msgf("<Sample %v>", i)
+	}
+}
+
+func (w Wrapper) TickReqParams(TickerID ibapi.TickerID, minTick float64, bboExchange string, snapshotPermissions int64) {
+	log.Info().Int64("TickerID", TickerID).Str("MinTick", ibapi.FloatMaxString(minTick)).Str("BboExchange", bboExchange).Str("SnapshotPermissions", ibapi.IntMaxString(snapshotPermissions)).Msg("<TickReqParams>")
+}
+
+func (w Wrapper) NewsProviders(newsProviders []ibapi.NewsProvider) {
+	for _, np := range newsProviders {
+		log.Info().Stringer("NewsProvider", np).Msg("<NewsProviders>")
+	}
+}
+
+func (w Wrapper) NewsArticle(requestID int64, articleType int64, articleText string) {
+	log.Info().Int64("RequestID", requestID).Int64("ArticleType", articleType).Str("ArticleText", articleText).Msg("<NewsArticle>")
+}
+
+func (w Wrapper) HistoricalNews(requestID int64, time string, providerCode string, articleID string, headline string) {
+	log.Info().Int64("RequestID", requestID).Str("news time", time).Str("ProviderCode", providerCode).Str("ProviderCode", providerCode).Str("Headline", headline).Msg("<HistoricalNews>")
+}
+
+func (w Wrapper) HistoricalNewsEnd(requestID int64, hasMore bool) {
+	log.Info().Int64("RequestID", requestID).Bool("HasMore", hasMore).Msg("<HistoricalNewsEnd>")
+}
+
+func (w Wrapper) HeadTimestamp(reqID int64, headTimestamp string) {
+	log.Info().Int64("ReqID", reqID).Str("HeadTimestamp", headTimestamp).Msg("<HeadTimestamp>")
+}
+
+func (w Wrapper) HistogramData(reqID int64, data []ibapi.HistogramData) {
+	log.Info().Int64("ReqID", reqID).Any("Data", data).Msg("<HistogramData>")
+}
+
+func (w Wrapper) HistoricalDataUpdate(reqID int64, bar *ibapi.Bar) {
+	log.Info().Int64("ReqID", reqID).Stringer("Bar", bar).Msg("<HistoricalDataUpdate>")
+}
+
+func (w Wrapper) RerouteMktDataReq(reqID int64, conID int64, exchange string) {
+	log.Info().Int64("ReqID", reqID).Int64("ConID", conID).Str("Exchange", exchange).Msg("<RerouteMktDataReq>")
+}
+
+func (w Wrapper) RerouteMktDepthReq(reqID int64, conID int64, exchange string) {
+	log.Info().Int64("ReqID", reqID).Int64("ConID", conID).Str("Exchange", exchange).Msg("<RerouteMktDepthReq>")
+}
+
+func (w Wrapper) MarketRule(marketRuleID int64, priceIncrements []ibapi.PriceIncrement) {
+	log.Info().Int64("MarketRuleID", marketRuleID).Any("PriceIncrements", priceIncrements).Msg("<MarketRule>")
+}
+
+func (w Wrapper) Pnl(reqID int64, dailyPnL float64, unrealizedPnL float64, realizedPnL float64) {
+	log.Info().Int64("ReqID", reqID).Str("DailyPnL", ibapi.FloatMaxString(dailyPnL)).Str("UnrealizedPnL", ibapi.FloatMaxString(unrealizedPnL)).Str("RealizedPnL", ibapi.FloatMaxString(realizedPnL)).Msg("<Pnl>")
+}
+
+func (w Wrapper) PnlSingle(reqID int64, pos ibapi.Decimal, dailyPnL float64, unrealizedPnL float64, realizedPnL float64, value float64) {
+	log.Info().Int64("ReqID", reqID).Str("Position", ibapi.DecimalMaxString(pos)).Str("DailyPnL", ibapi.FloatMaxString(dailyPnL)).Str("UnrealizedPnL", ibapi.FloatMaxString(unrealizedPnL)).Str("RealizedPnL", ibapi.FloatMaxString(realizedPnL)).Str("Value", ibapi.FloatMaxString(value)).Msg("<PnlSingle>")
+}
+
+func (w Wrapper) HistoricalTicks(reqID int64, ticks []ibapi.HistoricalTick, done bool) {
+	log.Info().Int64("ReqID", reqID).Bool("Done", done).Any("Ticks", ticks).Msg("<HistoricalTicks>")
+}
+
+func (w Wrapper) HistoricalTicksBidAsk(reqID int64, ticks []ibapi.HistoricalTickBidAsk, done bool) {
+	log.Info().Int64("ReqID", reqID).Bool("Done", done).Any("Ticks", ticks).Msg("<HistoricalTicksBidAsk>")
+}
+
+func (w Wrapper) HistoricalTicksLast(reqID int64, ticks []ibapi.HistoricalTickLast, done bool) {
+	log.Info().Int64("ReqID", reqID).Bool("Done", done).Any("Ticks", ticks).Msg("<HistoricalTicksLast>")
+}
+
+func (w Wrapper) TickByTickAllLast(reqID int64, tickType int64, time int64, price float64, size ibapi.Decimal, tickAttribLast ibapi.TickAttribLast, exchange string, specialConditions string) {
+	log.Info().Int64("ReqID", reqID).Int64("TickType", tickType).Int64("Tick time", time).Str("Price", ibapi.FloatMaxString(price)).Str("Size", ibapi.DecimalMaxString(size)).Bool("PastLimit", tickAttribLast.PastLimit).Bool("Unreported", tickAttribLast.Unreported).Str("Exchange", exchange).Str("SpecialConditions", specialConditions).Msg("<TickByTickAllLast>")
+}
+
+func (w Wrapper) TickByTickBidAsk(reqID int64, time int64, bidPrice float64, askPrice float64, bidSize ibapi.Decimal, askSize ibapi.Decimal, tickAttribBidAsk ibapi.TickAttribBidAsk) {
+	log.Info().Int64("ReqID", reqID).Int64("Tick time", time).Str("BidPrice", ibapi.FloatMaxString(bidPrice)).Str("AskPrice", ibapi.FloatMaxString(askPrice)).Str("BidSize", ibapi.DecimalMaxString(bidSize)).Str("AskSize", ibapi.DecimalMaxString(askSize)).Bool("AskPastHigh", tickAttribBidAsk.AskPastHigh).Bool("BidPastLow", tickAttribBidAsk.BidPastLow).Msg("<TickByTickBidAsk>")
+}
+
+func (w Wrapper) TickByTickMidPoint(reqID int64, time int64, midPoint float64) {
+	log.Info().Int64("ReqID", reqID).Int64("Tick time", time).Str("MidPoint", ibapi.FloatMaxString(midPoint)).Msg("<TickByTickMidPoint>")
+}
+
+func (w Wrapper) OrderBound(permID int64, clientID int64, orderID int64) {
+	log.Info().Str("PermID", ibapi.LongMaxString(permID)).Str("ClientID", ibapi.IntMaxString(clientID)).Str("OrderID", ibapi.IntMaxString(orderID)).Msg("<OrderBound>")
+}
+
+func (w Wrapper) CompletedOrder(contract *ibapi.Contract, order *ibapi.Order, orderState *ibapi.OrderState) {
+	logger := log.Info().Str("Account", order.Account).Str("PermID", ibapi.LongMaxString(order.PermID)).Str("ParentPermID", ibapi.LongMaxString(order.ParentPermID)).Str("Symbol", contract.Symbol).Str("SecType", contract.SecType).Str("Exchange", contract.Exchange).Str("Action", order.Action).Str("OrderType", order.OrderType).Str("TotalQuantity", ibapi.DecimalMaxString(order.TotalQuantity))
+	logger = logger.Str("CashQty", ibapi.FloatMaxString(order.CashQty)).Str("FilledQuantity", ibapi.DecimalMaxString(order.FilledQuantity)).Str("LmtPrice", ibapi.FloatMaxString(order.LmtPrice)).Str("AuxPrice", ibapi.FloatMaxString(order.AuxPrice)).Str("Status", orderState.Status)
+	logger = logger.Str("CompletedTime", orderState.CompletedTime).Str("CompletedStatus", orderState.CompletedStatus).Str("MinTradeQty", ibapi.IntMaxString(order.MinTradeQty)).Str("MinCompeteSize", ibapi.IntMaxString(order.MinCompeteSize))
+	if order.CompeteAgainstBestOffset == ibapi.COMPETE_AGAINST_BEST_OFFSET_UP_TO_MID {
+		logger = logger.Str("CompeteAgainstBestOffset", "UpToMid")
+	} else {
+		logger = logger.Str("CompeteAgainstBestOffset", ibapi.FloatMaxString(order.CompeteAgainstBestOffset))
+	}
+	logger = logger.Str("MidOffsetAtWhole", ibapi.FloatMaxString(order.MidOffsetAtWhole)).Str("MidOffsetAtHalf", ibapi.FloatMaxString(order.MidOffsetAtHalf)).Str("CustomerAccount", order.CustomerAccount)
+	logger = logger.Bool("ProfessionalCustomer", order.ProfessionalCustomer).Str("Submitter", order.Submitter).Bool("ImbalanceOnly", order.ImbalanceOnly)
+	logger.Msg("<CompletedOrder>")
+}
+
+func (w Wrapper) CompletedOrdersEnd() {
+	log.Info().Msg("<CompletedOrdersEnd>")
+}
+
+func (w Wrapper) ReplaceFAEnd(reqID int64, text string) {
+	log.Info().Int64("ReqID", reqID).Str("Text", text).Msg("<ReplaceFAEnd>")
+}
+
+func (w Wrapper) WshMetaData(reqID int64, dataJson string) {
+	log.Info().Int64("ReqID", reqID).Str("DataJson", dataJson).Msg("<WshMetaData>")
+}
+
+func (w Wrapper) WshEventData(reqID int64, dataJson string) {
+	log.Info().Int64("ReqID", reqID).Str("DataJson", dataJson).Msg("<WshEventData>")
+}
+
+func (w Wrapper) HistoricalSchedule(reqID int64, startDarteTime, endDateTime, timeZone string, sessions []ibapi.HistoricalSession) {
+	log.Info().Int64("ReqID", reqID).Str("StartDarteTime", startDarteTime).Str("EndDateTime", endDateTime).Str("TimeZone", timeZone).Msg("<HistoricalSchedule>")
+}
+
+func (w Wrapper) UserInfo(reqID int64, whiteBrandingId string) {
+	log.Info().Int64("ReqID", reqID).Str("WhiteBrandingId", whiteBrandingId).Msg("<UserInfo>")
+}
+
+func (w Wrapper) CurrentTimeInMillis(timeInMillis int64) {
+	log.Info().Int64("TimeInMillis", timeInMillis).Msg("<CurrentTimeInMillis>")
+}
+
+// Protobuf
+
+func (w Wrapper) ExecDetailsProtoBuf(executionDetailsProto *protobuf.ExecutionDetails) {
+	log.Debug().Stringer("ExecutionDetailsProto", executionDetailsProto).Msg("<ExecDetailsProtoBuf>")
+}
+
+func (w Wrapper) ExecDetailsEndProtoBuf(executionDetailsEndProto *protobuf.ExecutionDetailsEnd) {
+	log.Debug().Stringer("ExecutionDetailsEndProto", executionDetailsEndProto).Msg("<ExecDetailsEndProtoBuf>")
+}
+
+func (w Wrapper) OrderStatusProtoBuf(orderStatusProto *protobuf.OrderStatus) {
+	log.Debug().Stringer("OrderStatusProto", orderStatusProto).Msg("<OrderStatusProtoBuf>")
+}
+
+func (w Wrapper) OpenOrderProtoBuf(openOrderProto *protobuf.OpenOrder) {
+	log.Debug().Stringer("OpenOrderProto", openOrderProto).Msg("<OpenOrderProtoBuf>")
+}
+
+func (w Wrapper) OpenOrdersEndProtoBuf(openOrdersEndProto *protobuf.OpenOrdersEnd) {
+	log.Debug().Stringer("OpenOrdersEndProto", openOrdersEndProto).Msg("<OpenOrdersEndProtoBuf>")
+}
+
+func (w Wrapper) ErrorProtoBuf(errorProto *protobuf.ErrorMessage) {
+	log.Debug().Stringer("ErrorProto", errorProto).Msg("<ErrorProtoBuf>")
+}
+
+func (w Wrapper) CompletedOrderProtoBuf(completedOrderProto *protobuf.CompletedOrder) {
+	log.Debug().Stringer("completedOrderProto", completedOrderProto).Msg("<completedOrderProtoBuf>")
+}
+
+func (w Wrapper) CompletedOrdersEndProtoBuf(completedOrdersEndProto *protobuf.CompletedOrdersEnd) {
+	log.Debug().Stringer("completedOrdersEndProto", completedOrdersEndProto).Msg("<completedOrdersEndProtoBuf>")
+}
+
+func (w Wrapper) OrderBoundProtoBuf(orderBoundProto *protobuf.OrderBound) {
+	log.Debug().Stringer("orderBoundProto", orderBoundProto).Msg("<orderBoundProtoBuf>")
+}
+
+func (w Wrapper) ContractDataProtoBuf(contractDataProto *protobuf.ContractData) {
+	log.Debug().Stringer("contractDataProto", contractDataProto).Msg("<ContractDataProtoBuf>")
+}
+
+func (w Wrapper) BondContractDataProtoBuf(contractDataProto *protobuf.ContractData) {
+	log.Debug().Stringer("contractDataProto", contractDataProto).Msg("<BondContractDataProtoBuf>")
+}
+
+func (w Wrapper) ContractDataEndProtoBuf(contractDataEndProto *protobuf.ContractDataEnd) {
+	log.Debug().Stringer("contractDataEndProto", contractDataEndProto).Msg("<ContractDataEndProtoBuf>")
+}
+
+func (w Wrapper) TickPriceProtoBuf(tickPriceProto *protobuf.TickPrice) {
+	log.Debug().Stringer("tickPriceProto", tickPriceProto).Msg("<TickPriceProtoBuf>")
+}
+
+func (w Wrapper) TickSizeProtoBuf(tickSizeProto *protobuf.TickSize) {
+	log.Debug().Stringer("tickSizeProto", tickSizeProto).Msg("<TickSizeProtoBuf>")
+}
+
+func (w Wrapper) TickOptionComputationProtoBuf(tickOptionComputationProto *protobuf.TickOptionComputation) {
+	log.Debug().Stringer("tickOptionComputationProto", tickOptionComputationProto).Msg("<TickOptionComputationProtoBuf>")
+}
+
+func (w Wrapper) TickGenericProtoBuf(tickGenericProto *protobuf.TickGeneric) {
+	log.Debug().Stringer("tickGenericProto", tickGenericProto).Msg("<TickGenericProtoBuf>")
+}
+
+func (w Wrapper) TickStringProtoBuf(tickStringProto *protobuf.TickString) {
+	log.Debug().Stringer("tickStringProto", tickStringProto).Msg("<TickStringProtoBuf>")
+}
+
+func (w Wrapper) TickSnapshotEndProtoBuf(tickSnapshotEndProto *protobuf.TickSnapshotEnd) {
+	log.Debug().Stringer("tickSnapshotEndProto", tickSnapshotEndProto).Msg("<TickSnapshotEndProtoBuf>")
+}
+
+func (w Wrapper) UpdateMarketDepthProtoBuf(marketDepthProto *protobuf.MarketDepth) {
+	log.Debug().Stringer("marketDepthProto", marketDepthProto).Msg("<UpdateMarketDepthProtoBuf>")
+}
+
+func (w Wrapper) UpdateMarketDepthL2ProtoBuf(marketDepthL2Proto *protobuf.MarketDepthL2) {
+	log.Debug().Stringer("marketDepthL2Proto", marketDepthL2Proto).Msg("<UpdateMarketDepthL2ProtoBuf>")
+}
+
+func (w Wrapper) MarketDataTypeProtoBuf(marketDataTypeProto *protobuf.MarketDataType) {
+	log.Debug().Stringer("marketDataTypeProto", marketDataTypeProto).Msg("<MarketDataTypeProtoBuf>")
+}
+
+func (w Wrapper) TickReqParamsProtoBuf(tickReqParamsProto *protobuf.TickReqParams) {
+	log.Debug().Stringer("tickReqParamsProto", tickReqParamsProto).Msg("<TickReqParamsProtoBuf>")
+}
+
+func (w Wrapper) UpdateAccountValueProtoBuf(accountValueProto *protobuf.AccountValue) {
+	log.Debug().Stringer("accountValueProto", accountValueProto).Msg("<UpdateAccountValueProtoBuf>")
+}
+
+func (w Wrapper) UpdatePortfolioProtoBuf(portfolioValueProto *protobuf.PortfolioValue) {
+	log.Debug().Stringer("portfolioValueProto", portfolioValueProto).Msg("<UpdatePortfolioProtoBuf>")
+}
+
+func (w Wrapper) UpdateAccountTimeProtoBuf(accountUpdateTimeProto *protobuf.AccountUpdateTime) {
+	log.Debug().Stringer("accountUpdateTimeProto", accountUpdateTimeProto).Msg("<UpdateAccountTimeProtoBuf>")
+}
+
+func (w Wrapper) AccountDataEndProtoBuf(accountDataEndProto *protobuf.AccountDataEnd) {
+	log.Debug().Stringer("accountDataEndProto", accountDataEndProto).Msg("<AccountDataEndProtoBuf>")
+}
+
+func (w Wrapper) ManagedAccountsProtoBuf(managedAccountsProto *protobuf.ManagedAccounts) {
+	log.Debug().Stringer("managedAccountsProto", managedAccountsProto).Msg("<ManagedAccountsProtoBuf>")
+}
+
+func (w Wrapper) PositionProtoBuf(positionProto *protobuf.Position) {
+	log.Debug().Stringer("positionProto", positionProto).Msg("<PositionProtoBuf>")
+}
+
+func (w Wrapper) PositionEndProtoBuf(positionEndProto *protobuf.PositionEnd) {
+	log.Debug().Stringer("positionEndProto", positionEndProto).Msg("<PositionEndProtoBuf>")
+}
+
+func (w Wrapper) AccountSummaryProtoBuf(accountSummaryProto *protobuf.AccountSummary) {
+	log.Debug().Stringer("accountSummaryProto", accountSummaryProto).Msg("<AccountSummaryProtoBuf>")
+}
+
+func (w Wrapper) AccountSummaryEndProtoBuf(accountSummaryEndProto *protobuf.AccountSummaryEnd) {
+	log.Debug().Stringer("accountSummaryEndProto", accountSummaryEndProto).Msg("<AccountSummaryEndProtoBuf>")
+}
+
+func (w Wrapper) PositionMultiProtoBuf(positionMultiProto *protobuf.PositionMulti) {
+	log.Debug().Stringer("positionMultiProto", positionMultiProto).Msg("<PositionMultiProtoBuf>")
+}
+
+func (w Wrapper) PositionMultiEndProtoBuf(positionMultiEndProto *protobuf.PositionMultiEnd) {
+	log.Debug().Stringer("positionMultiEndProto", positionMultiEndProto).Msg("<PositionMultiEndProtoBuf>")
+}
+
+func (w Wrapper) AccountUpdateMultiProtoBuf(accountUpdateMultiProto *protobuf.AccountUpdateMulti) {
+	log.Debug().Stringer("accountUpdateMultiProto", accountUpdateMultiProto).Msg("<AccountUpdateMultiProtoBuf>")
+}
+
+func (w Wrapper) AccountUpdateMultiEndProtoBuf(accountUpdateMultiEndProto *protobuf.AccountUpdateMultiEnd) {
+	log.Debug().Stringer("accountUpdateMultiEndProto", accountUpdateMultiEndProto).Msg("<AccountUpdateMultiEndProtoBuf>")
+}
+
+func (w Wrapper) HistoricalDataProtoBuf(historicalDataProto *protobuf.HistoricalData) {
+	log.Debug().Stringer("historicalDataProto", historicalDataProto).Msg("<HistoricalDataProtoBuf>")
+}
+
+func (w Wrapper) HistoricalDataUpdateProtoBuf(historicalDataUpdateProto *protobuf.HistoricalDataUpdate) {
+	log.Debug().Stringer("historicalDataUpdateProto", historicalDataUpdateProto).Msg("<HistoricalDataUpdateProtoBuf>")
+}
+
+func (w Wrapper) HistoricalDataEndProtoBuf(historicalDataEndProto *protobuf.HistoricalDataEnd) {
+	log.Debug().Stringer("historicalDataEndProto", historicalDataEndProto).Msg("<HistoricalDataEndProtoBuf>")
+}
+
+func (w Wrapper) RealTimeBarTickProtoBuf(realTimeBarTickProto *protobuf.RealTimeBarTick) {
+	log.Debug().Stringer("realTimeBarTickProto", realTimeBarTickProto).Msg("<RealTimeBarTickProtoBuf>")
+}
+
+func (w Wrapper) HeadTimestampProtoBuf(headTimestampProto *protobuf.HeadTimestamp) {
+	log.Debug().Stringer("headTimestampProto", headTimestampProto).Msg("<HeadTimestampProtoBuf>")
+}
+
+func (w Wrapper) HistogramDataProtoBuf(histogramDataProto *protobuf.HistogramData) {
+	log.Debug().Stringer("histogramDataProto", histogramDataProto).Msg("<HistogramDataProtoBuf>")
+}
+
+func (w Wrapper) HistoricalTicksProtoBuf(historicalTicksProto *protobuf.HistoricalTicks) {
+	log.Debug().Stringer("historicalTicksProto", historicalTicksProto).Msg("<HistoricalTicksProtoBuf>")
+}
+
+func (w Wrapper) HistoricalTicksBidAskProtoBuf(historicalTicksBidAskProto *protobuf.HistoricalTicksBidAsk) {
+	log.Debug().Stringer("historicalTicksBidAskProto", historicalTicksBidAskProto).Msg("<HistoricalTicksBidAskProtoBuf>")
+}
+
+func (w Wrapper) HistoricalTicksLastProtoBuf(historicalTicksLastProto *protobuf.HistoricalTicksLast) {
+	log.Debug().Stringer("historicalTicksLastProto", historicalTicksLastProto).Msg("<HistoricalTicksLastProtoBuf>")
+}
+
+func (w Wrapper) TickByTickDataProtoBuf(tickByTickDataProto *protobuf.TickByTickData) {
+	log.Debug().Stringer("tickByTickDataProto", tickByTickDataProto).Msg("<TickByTickDataProtoBuf>")
+}
