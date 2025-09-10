@@ -1,9 +1,10 @@
 # ibtui specific:
 .env
-t
-tui
+./t
+./tui
 debug
 logfile.json
+./gomodupdate
 
 # github golang template:
 
