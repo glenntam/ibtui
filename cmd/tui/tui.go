@@ -6,7 +6,6 @@ import (
 	"os"
 	"strings"
 	"time"
-	"golang.org/x/term"
 
 	"github.com/glenntam/ibtui/internal/panels"
 	"github.com/glenntam/ibtui/internal/state"
@@ -14,10 +13,14 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/scmhub/ibsync"
+	"golang.org/x/term"
 )
 
-type refreshMsg     time.Time
+// Use this type to catch repeated refreshIBState messages in Update().
+type refreshMsg time.Time
 
+// model reflects the current state of the TUI app.
+// model.ibs reflects the state of the IB account via continued polling.
 type model struct {
 	ib          *ibsync.IB
 	ibs         *state.IBState
@@ -37,27 +40,33 @@ type model struct {
 	screenHeight int
 }
 
-func (m *model) renderPorfolioTab() string {
+// Render the Portfolio panel into a string for further Bubbletea rendering.
+func (m *model) renderPorfolioContent() string {
 	return fmt.Sprintf("%s (%v)", m.ibs.CurrentTime.Format(time.StampMilli), m.ibs.CurrentTime.Location())
 }
 
-func (m *model) renderWatchlistTab() string {
+// Render the Watchlist panel into a string for further Bubbletea rendering.
+func (m *model) renderWatchlistContent() string {
 	return "renderWatchlistTab"
 }
 
-func (m *model) renderOrderEntryTab() string {
+// Render the Order Entry panel into a string for further Bubbletea rendering.
+func (m *model) renderOrderEntryContent() string {
 	return "renderOrderEntryTab"
 }
 
-func (m *model) renderOpenOrdersTab() string {
+// Render the Open Orders panel into a string for further Bubbletea rendering.
+func (m *model) renderOpenOrdersContent() string {
 	return "renderOpenOrdersTab"
 }
 
-func (m *model) renderAITab() string {
-	return "renderAITab"
+// Render the Algo panel into a string for further Bubbletea rendering.
+func (m *model) renderAlgoContent() string {
+	return "renderAlgoTab"
 }
 
-func (m *model) renderLogTab() string {
+// Render the Log panel into a string for further Bubbletea rendering.
+func (m *model) renderLogContent() string {
 	if panels.CursorAtEOF(m.logFile, m.logCursor) == true {
 		m.logFollow = true
 	}
@@ -70,7 +79,7 @@ func (m *model) renderLogTab() string {
 			offset = fileInfo.Size()
 		}
 	}
-	m.logLines = panels.RenderLog(m.logFile, offset, 10, m.screenWidth - 4)
+	m.logLines = panels.RenderLog(m.logFile, offset, 10, m.screenWidth-4)
 
 	str := strings.Join(m.logLines, "\n")
 	strings.TrimRight(str, "\r\n")
@@ -78,30 +87,35 @@ func (m *model) renderLogTab() string {
 	return str
 }
 
-func (m *model) renderTradeLogTab() string {
+// Render the completed Trades panel into a string.
+func (m *model) renderTradeLogContent() string {
 	return "renderTradeLogTab"
 }
 
-// Get the state of IB account and update model fields
+// Catchall function to gather IB account state, update
+// TUI model fields, and then set itself to repeat.
 func (m *model) refreshIBState() tea.Cmd {
-	// portfolio tab
+	// Portfolio tab:
 	m.ibs.ReqCurrentTimeMilli(m.ib, m.timezone)
-	// log tab
+
+	// Log tab:
 	if m.logFollow == true {
 		m.logCursor = panels.GetFileSize(m.logFile)
 		m.panelGroups[2].Tabs[0] = "6. Log"
 	} else {
-	m.panelGroups[2].Tabs[0] = "6. Log*"
+		m.panelGroups[2].Tabs[0] = "6. Log*"
 	}
-	// render all tabs
-	m.panelGroups[0].Content[0] = m.renderPorfolioTab()
-	m.panelGroups[0].Content[1] = m.renderWatchlistTab()
-	m.panelGroups[1].Content[0] = m.renderOrderEntryTab()
-	m.panelGroups[1].Content[1] = m.renderOpenOrdersTab()
-	m.panelGroups[1].Content[2] = m.renderAITab()
-	m.panelGroups[2].Content[0] = m.renderLogTab()
-	m.panelGroups[2].Content[1] = m.renderTradeLogTab()
 
+	// Render All tabs:
+	m.panelGroups[0].Content[0] = m.renderPorfolioContent()
+	m.panelGroups[0].Content[1] = m.renderWatchlistContent()
+	m.panelGroups[1].Content[0] = m.renderOrderEntryContent()
+	m.panelGroups[1].Content[1] = m.renderOpenOrdersContent()
+	m.panelGroups[1].Content[2] = m.renderAlgoContent()
+	m.panelGroups[2].Content[0] = m.renderLogContent()
+	m.panelGroups[2].Content[1] = m.renderTradeLogContent()
+
+	// Re-run timer:
 	return tea.Batch(
 		tea.Tick(50*time.Millisecond, func(t time.Time) tea.Msg {
 			return refreshMsg(t)
@@ -109,12 +123,12 @@ func (m *model) refreshIBState() tea.Cmd {
 	)
 }
 
+// Called once at init before the TUI loops. Use it to kick off a cmd.
 func (m *model) Init() tea.Cmd {
-	fileSize := panels.GetFileSize(m.logFile)
-	m.logCursor = fileSize
-	m.logFollow = true
-	m.logHeight = 10
-	// Use x/term to temprarily get init screen width
+	logFileSize := panels.GetFileSize(m.logFile)
+	m.logCursor = logFileSize
+
+	// Use x/term to temporarily get init screen width/height before passing to TUI:
 	termWidth, termHeight, err := term.GetSize(int(os.Stdout.Fd()))
 	if err != nil {
 		termWidth = 48
@@ -123,23 +137,26 @@ func (m *model) Init() tea.Cmd {
 	m.screenWidth = termWidth
 	m.screenHeight = termHeight
 
+	// Initialize panel structure:
 	topGroup := &panels.PanelGroup{
-		Tabs:    []string{"1. Portfolio", "2. Watchlist",},
-		Content: []string{m.renderPorfolioTab(), m.renderWatchlistTab()},
+		Tabs:    []string{"1. Portfolio", "2. Watchlist"},
+		Content: []string{m.renderPorfolioContent(), m.renderWatchlistContent()},
 	}
 	midGroup := &panels.PanelGroup{
-		Tabs:    []string{"3. Quote / Order Entry", "4. Open Orders", "5. AI"},
-		Content: []string{m.renderOrderEntryTab(), m.renderOpenOrdersTab(), m.renderAITab()},
+		Tabs:    []string{"3. Quote / Order Entry", "4. Open Orders", "5. Algos"},
+		Content: []string{m.renderOrderEntryContent(), m.renderOpenOrdersContent(), m.renderAlgoContent()},
 	}
 	botGroup := &panels.PanelGroup{
 		Tabs:    []string{"6. Log", "7. Trade Log"},
-		Content: []string{m.renderLogTab(), m.renderTradeLogTab()},
+		Content: []string{m.renderLogContent(), m.renderTradeLogContent()},
 	}
 	m.panelGroups = append(m.panelGroups, topGroup, midGroup, botGroup)
-	slog.Info("TUI started")
+
+	slog.Info("TUI initializing")
 	return m.refreshIBState()
 }
 
+// Catch keypresses and screen updates here, then pass to View().
 func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch v := msg.(type) {
 	case tea.KeyMsg:
@@ -198,6 +215,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// Based on the TUI model state, render the data to screen.
 func (m *model) View() string {
 	if m.screenWidth == 0 || m.screenHeight == 0 {
 		return "loading…"

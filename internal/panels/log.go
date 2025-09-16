@@ -1,3 +1,5 @@
+// Helper functions to compile log file entries
+// into format suitable for TUI consumption.
 package panels
 
 import (
@@ -11,9 +13,8 @@ import (
 	"time"
 )
 
-// Given a file and a byte location (pos), return
-// the location of the previous occurrence of "\n".
-// Return itself if there are none.
+// Given a file and a byte location (pos), return the location of the
+// previous occurrence of "\n".  Return itself if there are none.
 func PrevNewline(f *os.File, pos int64) int64 {
 	if pos <= 0 {
 		return pos
@@ -37,15 +38,14 @@ func PrevNewline(f *os.File, pos int64) int64 {
 	return pos
 }
 
-// Given a file and a byte location (pos), return
-// the location of the next occurrence of "\n".
-// Return itself if there are none.
+// Given a file and a byte location (pos), return the location of
+// the next occurrence of "\n".  Return itself if there are none.
 func NextNewline(f *os.File, pos int64) int64 {
 	if pos <= 0 {
 		return pos
 	}
 	fileSize := GetFileSize(f)
-	if pos >= fileSize {  // Last line already
+	if pos >= fileSize { // Last line already
 		return fileSize
 	}
 	buf := make([]byte, 1)
@@ -108,50 +108,49 @@ func RenderLog(f *os.File, pos int64, n, w int) []string {
 			slog.Error("Couldn't Unmarshal JSON line object", "error", err, "logline", l)
 			break
 		}
-
+		// Seperately handle "level"
 		level, ok := lineObj["level"].(string)
 		if !ok {
 			slog.Error("Log entry in log file didn't have a log level", "error", err, "logline", l)
 			break
 		} else {
-			delete (lineObj, "level")
+			delete(lineObj, "level")
 		}
-
+		// Seperately handle "time"
 		timestamp, ok := lineObj["time"].(string)
 		if !ok {
 			slog.Error("Log entry in log file didn't have a timestamp", "error", err, "logline", l)
 			break
 		} else {
-			delete (lineObj, "time")
+			delete(lineObj, "time")
 		}
 		t, err := time.Parse(time.RFC3339Nano, timestamp)
 		if err != nil {
 			t, _ = time.Parse(time.RFC3339, timestamp)
 		}
 		timeStr := t.Format("Jan 02, 15:04")
-
+		// Seperately handle "msg", if it exists
 		msg, ok := lineObj["msg"].(string)
 		if ok {
-			delete (lineObj, "msg")
+			delete(lineObj, "msg")
 		}
-
+		// Flatten all other keys into a string
 		keys := make([]string, 0, len(lineObj))
 		for k := range lineObj {
 			keys = append(keys, k)
 		}
 		sort.Strings(keys)
-
 		objs := make([]string, 0, len(keys))
 		for _, key := range keys {
 			objs = append(objs, fmt.Sprintf("%s=%v", key, lineObj[key]))
 		}
 		logDisplayStr := fmt.Sprintf("%s [%s] %s. %s", level, timeStr, msg, strings.Join(objs, ", "))
-
+		// Compile whole log entry string
 		result = append(result, logDisplayStr)
 		pos = PrevNewline(f, pos) // Started at the bottom; move up to the previous line
 	}
-	slices.Reverse(result)
-
+	slices.Reverse(result) // Strings are appended in reverse order. Reverse them.
+	// Handle word wraps based on screen size
 	var wrapped []string
 	for _, s := range result {
 		for len(s) > w {

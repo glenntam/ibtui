@@ -1,3 +1,4 @@
+// The main entry point of ibtui and starting the TUI.
 package main
 
 import (
@@ -10,7 +11,6 @@ import (
 	"github.com/glenntam/ibtui/internal/logger"
 	"github.com/glenntam/ibtui/internal/smtp"
 	"github.com/glenntam/ibtui/internal/state"
-	// "github.com/glenntam/ibtui/internal/wrapper"
 	"github.com/glenntam/ibtui/internal/zerobridge"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -19,9 +19,11 @@ import (
 	"github.com/scmhub/ibsync"
 )
 
+// Assemble ibtui top-level components, including config, logger and tui.
 func main() {
 	cfg := env.ParseDotEnv()
 
+	// Set up Logger:
 	timezone, err := time.LoadLocation(cfg.Timezone)
 	if err != nil {
 		time.Local = time.UTC
@@ -49,13 +51,25 @@ func main() {
 		slog.Error("Couldn't start new slogger", "error", err)
 	}
 	slog.SetDefault(slogger)
-	// Pipe ibsync's internal zerologger to stdlib slog
+	// (pipe ibsync's internal zerologger to stdlib slog)
 	bridge := &zerobridge.ZerologToSlogBridge{Slogger: slogger}
 	log.Logger = zerolog.New(bridge).With().Timestamp().Logger()
 	ib := ibsync.NewIB()
 	ib.SetLogger(log.Logger)
 	ib.SetClientLogLevel(1)
 
+	// Set up TUI model:
+	ibs := state.NewIBState()
+	tui := &model{
+		ib:        ib,
+		ibs:       ibs,
+		timezone:  cfg.Timezone,
+		logFile:   logFile,
+		logHeight: 10,
+		logFollow: true,
+	}
+
+	// Connect to IB API and start TUI:
 	ibCfg := ibsync.NewConfig(
 		ibsync.WithHost(cfg.Host),
 		ibsync.WithPort(cfg.Port),
@@ -67,20 +81,14 @@ func main() {
 	}
 	defer cleanup(ib)
 
-	ibs := state.NewIBState()
-	m := &model{
-		ib:       ib,
-		ibs:      ibs,
-		timezone: cfg.Timezone,
-		logFile:  logFile,
-	}
-	p := tea.NewProgram(m, tea.WithAltScreen())
+	p := tea.NewProgram(tui, tea.WithAltScreen())
 	if _, err := p.Run(); err != nil {
 		slog.Error("Couldn't run bubbletea", "error", err)
 	}
 	return
 }
 
+// A deferred cleanup function to gracefully disconnect from IB API.
 func cleanup(ib *ibsync.IB) {
 	if err := ib.Disconnect(); err != nil {
 		slog.Error("Couldn't disconnect IB", "error", err)

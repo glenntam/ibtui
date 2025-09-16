@@ -1,3 +1,4 @@
+// Custom package to retrive config settings from .env variables.
 package env
 
 import (
@@ -8,6 +9,7 @@ import (
 	"github.com/joho/godotenv"
 )
 
+// Parse .env variables to Go struct
 type Config struct {
 	Host          string
 	Port          int
@@ -23,9 +25,9 @@ type Config struct {
 }
 
 // Get environment variables from .env file.
-//
 // A file called ".env" must be located where the binary is run.
-// If .env exists but required environment variables are not found, then reasonable default values are used.
+// If .env exists but required environment variables are not found,
+// then reasonable default values are used.
 func ParseDotEnv() *Config {
 	err := godotenv.Load()
 	if err != nil {
@@ -62,11 +64,11 @@ func ParseDotEnv() *Config {
 	}
 
 	cfg := &Config{
-		Host:        host,
-		Port:        port,
-		ClientID:    clientID,
-		Timezone:    timezone,
-		LogFile:     logFile,
+		Host:     host,
+		Port:     port,
+		ClientID: clientID,
+		Timezone: timezone,
+		LogFile:  logFile,
 	}
 
 	smtpTo := os.Getenv("IBTUI_SMTP_TO")

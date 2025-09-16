@@ -1,3 +1,4 @@
+// Poll IB Gateway/TWS to receive current state of account.
 package state
 
 import (
@@ -7,16 +8,19 @@ import (
 	"github.com/scmhub/ibsync"
 )
 
+// The primary data structure used to save IB account state.
 type IBState struct {
-	CurrentTime    time.Time
+	CurrentTime time.Time
 }
 
+// Make a new IBSState struct (used to save IB account state).
 func NewIBState() *IBState {
 	return &IBState{
 		CurrentTime: time.Now(),
 	}
 }
 
+// Unused. Retrieve IB account system time in seconds.
 func (s *IBState) reqCurrentTime(ib *ibsync.IB) {
 	t, err := ib.ReqCurrentTime()
 	if err != nil {
@@ -26,6 +30,7 @@ func (s *IBState) reqCurrentTime(ib *ibsync.IB) {
 	s.CurrentTime = t
 }
 
+// Retrieve IB account system time in time.Time format.
 func (s *IBState) ReqCurrentTimeMilli(ib *ibsync.IB, timezone string) {
 	t := time.Now()
 	m, err := ib.ReqCurrentTimeInMillis()

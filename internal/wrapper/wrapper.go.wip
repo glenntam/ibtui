@@ -1,3 +1,4 @@
+// Currently unused package, in case future migration from ibsync to ibapi.
 package wrapper
 
 import (

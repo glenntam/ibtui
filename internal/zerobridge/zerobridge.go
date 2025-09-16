@@ -1,3 +1,4 @@
+// Custom bridge to pipe zerolog logger entries to log/slog logger.
 package zerobridge
 
 import (
@@ -6,10 +7,12 @@ import (
 	"strings"
 )
 
+// Container for log/slog logger.
 type ZerologToSlogBridge struct {
 	Slogger *slog.Logger
 }
 
+// Overload zerlolog Write() to conform to log/slog format.
 func (b *ZerologToSlogBridge) Write(p []byte) (n int, err error) {
 	// Parse the zerolog JSON output
 	var logEntry map[string]interface{}
@@ -18,20 +21,17 @@ func (b *ZerologToSlogBridge) Write(p []byte) (n int, err error) {
 		b.Slogger.Info("zerolog", "raw", strings.TrimSpace(string(p)))
 		return len(p), nil
 	}
-
 	// Extract standard fields
 	level, _ := logEntry["level"].(string)
 	message, _ := logEntry["message"].(string)
-
-	// Convert other fields to slog attributes
+	// Convert all other fields to slog attributes
 	var attrs []slog.Attr
 	for k, v := range logEntry {
 		if k != "level" && k != "message" && k != "time" && k != "errorTime" {
 			attrs = append(attrs, slog.Any(k, v))
 		}
 	}
-
-	// Convert zerolog level to slog level and log
+	// Convert zerolog level to slog levels
 	switch level {
 	case "debug":
 		b.Slogger.LogAttrs(nil, slog.LevelDebug, message, attrs...)

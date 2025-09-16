@@ -10,7 +10,6 @@ require (
 	github.com/joho/godotenv v1.5.1
 	github.com/rs/zerolog v1.34.0
 	github.com/scmhub/ibapi v0.10.39
-	github.com/scmhub/ibsync v0.10.39
 	golang.org/x/term v0.35.0
 )
 

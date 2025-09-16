@@ -1,3 +1,4 @@
+// A custom log/slog logger for ibtui
 package logger
 
 import (
@@ -46,7 +47,8 @@ func (h *SMTPHandler) WithGroup(name string) slog.Handler {
 	return h
 }
 
-// A logging handler that can contain multiple different type of handlers
+// A logging handler that can contain multiple different type of handlers.
+// In the case of ibtui, a JSON file logger and (optional) smtp emailer.
 type MultiHandler struct {
 	handlers []slog.Handler
 }
@@ -87,8 +89,7 @@ func (m *MultiHandler) WithGroup(name string) slog.Handler {
 
 // Create a custom multi-logger that implements log/slog.Logger
 //
-// DEBUG and above:   Output to standard output.
-// INFO and above:    Save to log file.
+// DEBUG and above:    Save to log file.
 // WARNING and above: Email (but only if smtp.AdminEmail is provided).
 func New(file *os.File, smtpClient *smtp.SMTPClient) (*slog.Logger, error) {
 	// stdoutHandler := slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
@@ -105,10 +106,8 @@ func New(file *os.File, smtpClient *smtp.SMTPClient) (*slog.Logger, error) {
 
 	multi := &MultiHandler{}
 	if smtpHandler.smtp.Recipient != "" {
-		// multi.handlers = []slog.Handler{stdoutHandler, fileHandler, smtpHandler}
 		multi.handlers = []slog.Handler{fileHandler, smtpHandler}
 	} else {
-		// multi.handlers =  []slog.Handler{stdoutHandler, fileHandler}
 		multi.handlers = []slog.Handler{fileHandler}
 	}
 	slog.SetDefault(slog.New(multi))
