@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 	"time"
+	"golang.org/x/term"
 
 	"github.com/glenntam/ibtui/internal/panels"
 	"github.com/glenntam/ibtui/internal/state"
@@ -15,40 +16,7 @@ import (
 	"github.com/scmhub/ibsync"
 )
 
-type (
-	refreshMsg     time.Time
-)
-
-var (
-	// Active tab style - this is the currently selected tab
-	activeTabBorderStyle = lipgloss.NewStyle().
-				Bold(true).                                        // Make text bold
-				Foreground(lipgloss.Color("#FFFFFF")).            // White text
-				Background(lipgloss.Color("#7D56F4")).            // Purple background
-				Border(lipgloss.RoundedBorder(), true, true, false, true). // Border: top=yes, right=yes, bottom=NO, left=yes
-				BorderForeground(lipgloss.Color("#7D56F4")).       // Purple border color
-				Padding(0, 1)                                     // No vertical padding, 1 space horizontal
-
-	// Inactive tab style - tabs that are not selected
-	inactiveTabBorderStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("#666666")).             // Gray text
-				Background(lipgloss.Color("#1A1A1A")).             // Dark background
-				Border(lipgloss.RoundedBorder(), true, true, false, true). // Same border pattern
-				BorderForeground(lipgloss.Color("#333333")).       // Dark gray border
-				Padding(0, 1)                                     // Same padding
-
-	// Content panel style - the main content area below tabs
-	tabContentStyle = lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).              // Full border around content
-			BorderForeground(lipgloss.Color("#7D56F4")).   // Purple border (matches active tab)
-			Padding(0, 1)                                 // 1 line vertical, 2 spaces horizontal padding
-			//MinHeight(15)                                  // Minimum height for content area
-
-	// Status line style - help text at the bottom
-	statusStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#666666")).         // Gray color for status text
-			Italic(true)                                   // Make it italic
-)
+type refreshMsg     time.Time
 
 type model struct {
 	ib          *ibsync.IB
@@ -56,22 +24,17 @@ type model struct {
 	timezone    string
 	currentTime string
 
-	logFile     *os.File
-	logLines    []string
-	logCursor   int64
-	logFollow   bool
+	logFile   *os.File
+	logHeight int
+	logLines  []string
+	logCursor int64
+	logFollow bool
 
-	lastUpdate  time.Time
-	panelGroups []*panelGroup
-	selectedTab int
+	lastUpdate   time.Time
+	panelGroups  []*panels.PanelGroup
+	selectedTab  int
 	screenWidth  int
 	screenHeight int
-}
-
-type panelGroup struct {
-	tabs        []string
-	content     []string
-	activeTab   int
 }
 
 func (m *model) renderPorfolioTab() string {
@@ -107,8 +70,11 @@ func (m *model) renderLogTab() string {
 			offset = fileInfo.Size()
 		}
 	}
-	m.logLines = panels.RenderLog(m.logFile, offset, 10)
-	str := strings.Join(m.logLines, "")
+	m.logLines = panels.RenderLog(m.logFile, offset, 10, m.screenWidth - 4)
+
+	str := strings.Join(m.logLines, "\n")
+	strings.TrimRight(str, "\r\n")
+
 	return str
 }
 
@@ -123,18 +89,18 @@ func (m *model) refreshIBState() tea.Cmd {
 	// log tab
 	if m.logFollow == true {
 		m.logCursor = panels.GetFileSize(m.logFile)
-		m.panelGroups[2].tabs[0] = "6. Log"
+		m.panelGroups[2].Tabs[0] = "6. Log"
 	} else {
-	m.panelGroups[2].tabs[0] = "6. Log*"
+	m.panelGroups[2].Tabs[0] = "6. Log*"
 	}
 	// render all tabs
-	m.panelGroups[0].content[0] = m.renderPorfolioTab()
-	m.panelGroups[0].content[1] = m.renderWatchlistTab()
-	m.panelGroups[1].content[0] = m.renderOrderEntryTab()
-	m.panelGroups[1].content[1] = m.renderOpenOrdersTab()
-	m.panelGroups[1].content[2] = m.renderAITab()
-	m.panelGroups[2].content[0] = m.renderLogTab()
-	m.panelGroups[2].content[1] = m.renderTradeLogTab()
+	m.panelGroups[0].Content[0] = m.renderPorfolioTab()
+	m.panelGroups[0].Content[1] = m.renderWatchlistTab()
+	m.panelGroups[1].Content[0] = m.renderOrderEntryTab()
+	m.panelGroups[1].Content[1] = m.renderOpenOrdersTab()
+	m.panelGroups[1].Content[2] = m.renderAITab()
+	m.panelGroups[2].Content[0] = m.renderLogTab()
+	m.panelGroups[2].Content[1] = m.renderTradeLogTab()
 
 	return tea.Batch(
 		tea.Tick(50*time.Millisecond, func(t time.Time) tea.Msg {
@@ -147,18 +113,27 @@ func (m *model) Init() tea.Cmd {
 	fileSize := panels.GetFileSize(m.logFile)
 	m.logCursor = fileSize
 	m.logFollow = true
+	m.logHeight = 10
+	// Use x/term to temprarily get init screen width
+	termWidth, termHeight, err := term.GetSize(int(os.Stdout.Fd()))
+	if err != nil {
+		termWidth = 48
+		termHeight = 22
+	}
+	m.screenWidth = termWidth
+	m.screenHeight = termHeight
 
-	topGroup := &panelGroup{
-		tabs:    []string{"1. Portfolio", "2. Watchlist",},
-		content: []string{m.renderPorfolioTab(), m.renderWatchlistTab()},
+	topGroup := &panels.PanelGroup{
+		Tabs:    []string{"1. Portfolio", "2. Watchlist",},
+		Content: []string{m.renderPorfolioTab(), m.renderWatchlistTab()},
 	}
-	midGroup := &panelGroup{
-		tabs:    []string{"3. Quote / Order Entry", "4. Open Orders", "5. AI"},
-		content: []string{m.renderOrderEntryTab(), m.renderOpenOrdersTab(), m.renderAITab()},
+	midGroup := &panels.PanelGroup{
+		Tabs:    []string{"3. Quote / Order Entry", "4. Open Orders", "5. AI"},
+		Content: []string{m.renderOrderEntryTab(), m.renderOpenOrdersTab(), m.renderAITab()},
 	}
-	botGroup := &panelGroup{
-		tabs:    []string{"6. Log", "7. Trade Log"},
-		content: []string{m.renderLogTab(), m.renderTradeLogTab()},
+	botGroup := &panels.PanelGroup{
+		Tabs:    []string{"6. Log", "7. Trade Log"},
+		Content: []string{m.renderLogTab(), m.renderTradeLogTab()},
 	}
 	m.panelGroups = append(m.panelGroups, topGroup, midGroup, botGroup)
 	slog.Info("TUI started")
@@ -173,25 +148,25 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		case "1":
 			m.selectedTab = 1
-			m.panelGroups[0].activeTab = 0
+			m.panelGroups[0].ActiveTab = 0
 		case "2":
 			m.selectedTab = 2
-			m.panelGroups[0].activeTab = 1
+			m.panelGroups[0].ActiveTab = 1
 		case "3":
 			m.selectedTab = 3
-			m.panelGroups[1].activeTab = 0
+			m.panelGroups[1].ActiveTab = 0
 		case "4":
 			m.selectedTab = 4
-			m.panelGroups[1].activeTab = 1
+			m.panelGroups[1].ActiveTab = 1
 		case "5":
 			m.selectedTab = 5
-			m.panelGroups[1].activeTab = 2
+			m.panelGroups[1].ActiveTab = 2
 		case "6":
 			m.selectedTab = 6
-			m.panelGroups[2].activeTab = 0
+			m.panelGroups[2].ActiveTab = 0
 		case "7":
 			m.selectedTab = 7
-			m.panelGroups[2].activeTab = 1
+			m.panelGroups[2].ActiveTab = 1
 		case "up", "k":
 			m.logFollow = false
 			m.logCursor = panels.PrevNewline(m.logFile, m.logCursor)
@@ -223,34 +198,19 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m *model) renderPanelGroup(g *panelGroup) string {
-	var tabRow []string
-	for i, tab := range g.tabs {
-		if i == g.activeTab {
-			tabRow = append(tabRow, activeTabBorderStyle.Render(tab))
-		} else {
-			tabRow = append(tabRow, inactiveTabBorderStyle.Render(tab))
-		}
-	}
-	tabBar := lipgloss.JoinHorizontal(lipgloss.Bottom, tabRow...)
-	body := tabContentStyle.
-		Width(m.screenWidth - 2).      // Account for border
-		Render(g.content[g.activeTab]) // Show content for current tab
-	return lipgloss.JoinVertical(lipgloss.Left, tabBar, body)
-}
-
 func (m *model) View() string {
 	if m.screenWidth == 0 || m.screenHeight == 0 {
 		return "loading…"
 	}
-	top := m.renderPanelGroup(m.panelGroups[0])
-	mid := m.renderPanelGroup(m.panelGroups[1])
-	bot := m.renderPanelGroup(m.panelGroups[2])
+	top := panels.RenderPanelGroup(m.panelGroups[0], m.screenWidth)
+	mid := panels.RenderPanelGroup(m.panelGroups[1], m.screenWidth)
+	bot := panels.RenderPanelGroup(m.panelGroups[2], m.screenWidth)
 
 	return lipgloss.JoinVertical(
 		lipgloss.Left,
 		top,
 		mid,
 		bot,
+		"STATUS LINE",
 	)
 }
