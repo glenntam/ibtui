@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"time"
 
 	"github.com/glenntam/ibtui/internal/env"
 	"github.com/glenntam/ibtui/internal/logger"
@@ -21,7 +22,15 @@ import (
 func main() {
 	cfg := env.ParseDotEnv()
 
-	smtp := smtp.NewSMTPClient(cfg.SMTPPort,
+	timezone, err := time.LoadLocation(cfg.Timezone)
+	if err != nil {
+		time.Local = time.UTC
+	} else {
+		time.Local = timezone
+	}
+
+	smtp := smtp.NewSMTPClient(
+		cfg.SMTPPort,
 		cfg.SMTPHost,
 		cfg.SMTPUsername,
 		string(cfg.SMTPPassword),
@@ -40,28 +49,31 @@ func main() {
 		slog.Error("Couldn't start new slogger", "error", err)
 	}
 	slog.SetDefault(slogger)
-	slog.Info("DEFAULT SLOG SET")
 	// Pipe ibsync's internal zerologger to stdlib slog
 	bridge := &zerobridge.ZerologToSlogBridge{Slogger: slogger}
-	zerolog.SetGlobalLevel(zerolog.InfoLevel)
 	log.Logger = zerolog.New(bridge).With().Timestamp().Logger()
-	zerolog.DefaultContextLogger = &log.Logger
-	slog.Info("BRIDGED")
-
 	ib := ibsync.NewIB()
-	ibCfg := ibsync.NewConfig(ibsync.WithHost(cfg.Host), ibsync.WithPort(cfg.Port), ibsync.WithClientID(cfg.ClientID))
+	ib.SetLogger(log.Logger)
+	ib.SetClientLogLevel(1)
+
+	ibCfg := ibsync.NewConfig(
+		ibsync.WithHost(cfg.Host),
+		ibsync.WithPort(cfg.Port),
+		ibsync.WithClientID(cfg.ClientID),
+	)
+
 	if err = ib.Connect(ibCfg); err != nil {
 		slog.Error("Couldn't connect to IB", "error", err)
 	}
 	defer cleanup(ib)
+
 	ibs := state.NewIBState()
 	m := &model{
-		ib:        ib,
-		ibs:       ibs,
-		timezone:  cfg.Timezone,
-		logFile:   logFile,
+		ib:       ib,
+		ibs:      ibs,
+		timezone: cfg.Timezone,
+		logFile:  logFile,
 	}
-
 	p := tea.NewProgram(m, tea.WithAltScreen())
 	if _, err := p.Run(); err != nil {
 		slog.Error("Couldn't run bubbletea", "error", err)

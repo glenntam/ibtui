@@ -1,7 +1,6 @@
 package state
 
 import (
-	// "fmt"
 	"log/slog"
 	"time"
 
@@ -37,10 +36,5 @@ func (s *IBState) ReqCurrentTimeMilli(ib *ibsync.IB, timezone string) {
 		nanoseconds := (m % 1000) * 1_000_000
 		t = time.Unix(seconds, nanoseconds)
 	}
-	tz, err := time.LoadLocation(timezone)
-	if err != nil {
-		slog.Error("Couldn't find "+timezone+" time zone.", "error", err)
-		tz = time.UTC
-	}
-	s.CurrentTime = t.In(tz)
+	s.CurrentTime = t
 }

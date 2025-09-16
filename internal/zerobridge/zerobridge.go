@@ -22,19 +22,13 @@ func (b *ZerologToSlogBridge) Write(p []byte) (n int, err error) {
 	// Extract standard fields
 	level, _ := logEntry["level"].(string)
 	message, _ := logEntry["message"].(string)
-	timestamp, _ := logEntry["time"].(string)
 
 	// Convert other fields to slog attributes
 	var attrs []slog.Attr
 	for k, v := range logEntry {
-		if k != "level" && k != "message" && k != "time" {
+		if k != "level" && k != "message" && k != "time" && k != "errorTime" {
 			attrs = append(attrs, slog.Any(k, v))
 		}
-	}
-
-	// Add timestamp if present
-	if timestamp != "" {
-		attrs = append(attrs, slog.String("zerolog_time", timestamp))
 	}
 
 	// Convert zerolog level to slog level and log
