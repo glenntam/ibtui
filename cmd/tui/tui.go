@@ -22,19 +22,19 @@ type refreshMsg time.Time
 // model reflects the current state of the TUI app.
 // model.ibs reflects the state of the IB account via continued polling.
 type model struct {
-	ib          *ibsync.IB
-	ibs         *state.IBState
-	timezone    string
-	currentTime string
+	ib           *ibsync.IB
+	ibs          *state.IBState
+	timezone     string
+	currentTime  string
 
-	logFile   *os.File
-	logHeight int
-	logLines  []string
-	logCursor int64
-	logFollow bool
+	logFile      *os.File
+	logHeight    int
+	logLines     []string
+	logCursor    int64
+	logFollow    bool
 
 	lastUpdate   time.Time
-	panelGroups  []*panels.PanelGroup
+	panels       []*panels.Panel
 	selectedTab  int
 	screenWidth  int
 	screenHeight int
@@ -101,23 +101,23 @@ func (m *model) refreshIBState() tea.Cmd {
 	// Log tab:
 	if m.logFollow == true {
 		m.logCursor = panels.GetFileSize(m.logFile)
-		m.panelGroups[2].Tabs[0] = "6. Log"
+		m.panels[5].Tab = "6. Log"
 	} else {
-		m.panelGroups[2].Tabs[0] = "6. Log*"
+		m.panels[5].Tab = "6. Log*"
 	}
 
 	// Render All tabs:
-	m.panelGroups[0].Content[0] = m.renderPorfolioContent()
-	m.panelGroups[0].Content[1] = m.renderWatchlistContent()
-	m.panelGroups[1].Content[0] = m.renderOrderEntryContent()
-	m.panelGroups[1].Content[1] = m.renderOpenOrdersContent()
-	m.panelGroups[1].Content[2] = m.renderAlgoContent()
-	m.panelGroups[2].Content[0] = m.renderLogContent()
-	m.panelGroups[2].Content[1] = m.renderTradeLogContent()
+	m.panels[0].Content = m.renderPorfolioContent()
+	m.panels[1].Content = m.renderWatchlistContent()
+	m.panels[2].Content = m.renderOrderEntryContent()
+	m.panels[3].Content = m.renderOpenOrdersContent()
+	m.panels[4].Content = m.renderAlgoContent()
+	m.panels[5].Content = m.renderLogContent()
+	m.panels[6].Content = m.renderTradeLogContent()
 
 	// Re-run timer:
 	return tea.Batch(
-		tea.Tick(50*time.Millisecond, func(t time.Time) tea.Msg {
+		tea.Tick(30*time.Millisecond, func(t time.Time) tea.Msg {
 			return refreshMsg(t)
 		}),
 	)
@@ -137,21 +137,50 @@ func (m *model) Init() tea.Cmd {
 	m.screenWidth = termWidth
 	m.screenHeight = termHeight
 
-	// Initialize panel structure:
-	topGroup := &panels.PanelGroup{
-		Tabs:    []string{"1. Portfolio", "2. Watchlist"},
-		Content: []string{m.renderPorfolioContent(), m.renderWatchlistContent()},
-	}
-	midGroup := &panels.PanelGroup{
-		Tabs:    []string{"3. Quote / Order Entry", "4. Open Orders", "5. Algos"},
-		Content: []string{m.renderOrderEntryContent(), m.renderOpenOrdersContent(), m.renderAlgoContent()},
-	}
-	botGroup := &panels.PanelGroup{
-		Tabs:    []string{"6. Log", "7. Trade Log"},
-		Content: []string{m.renderLogContent(), m.renderTradeLogContent()},
-	}
-	m.panelGroups = append(m.panelGroups, topGroup, midGroup, botGroup)
-
+	// Initialize panels:
+	m.panels = append(m.panels, &panels.Panel{
+		Index: 1,
+		Tab: "1. Porfolio",
+		Content: m.renderPorfolioContent(),
+		Revealed: true,
+	})
+	m.panels = append(m.panels, &panels.Panel{
+		Index: 2,
+		Tab: "2. Watchlist",
+		Content: m.renderWatchlistContent(),
+		Revealed: false,
+	})
+	m.panels = append(m.panels, &panels.Panel{
+		Index: 3,
+		Tab: "3. Quote / Order Entry",
+		Content: m.renderOrderEntryContent(),
+		Revealed: true,
+	})
+	m.panels = append(m.panels, &panels.Panel{
+		Index: 4,
+		Tab: "4. Open Orders",
+		Content: m.renderOpenOrdersContent(),
+		Revealed: false,
+	})
+	m.panels = append(m.panels, &panels.Panel{
+		Index: 5,
+		Tab: "5. Algos",
+		Content: m.renderAlgoContent(),
+		Revealed: false,
+	})
+	m.panels = append(m.panels, &panels.Panel{
+		Index: 6,
+		Tab: "6. Log",
+		Content: m.renderLogContent(),
+		Revealed: true,
+	})
+	m.panels = append(m.panels, &panels.Panel{
+		Index: 7,
+		Tab: "7. Trade Log",
+		Content: m.renderTradeLogContent(),
+		Revealed: false,
+	})
+	m.selectedTab = 0
 	slog.Info("TUI initializing")
 	return m.refreshIBState()
 }
@@ -165,25 +194,35 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		case "1":
 			m.selectedTab = 1
-			m.panelGroups[0].ActiveTab = 0
+			m.panels[0].Revealed = true
+			m.panels[1].Revealed = false
 		case "2":
 			m.selectedTab = 2
-			m.panelGroups[0].ActiveTab = 1
+			m.panels[0].Revealed = false
+			m.panels[1].Revealed = true
 		case "3":
 			m.selectedTab = 3
-			m.panelGroups[1].ActiveTab = 0
+			m.panels[2].Revealed = true
+			m.panels[3].Revealed = false
+			m.panels[4].Revealed = false
 		case "4":
 			m.selectedTab = 4
-			m.panelGroups[1].ActiveTab = 1
+			m.panels[2].Revealed = false
+			m.panels[3].Revealed = true
+			m.panels[4].Revealed = false
 		case "5":
 			m.selectedTab = 5
-			m.panelGroups[1].ActiveTab = 2
+			m.panels[2].Revealed = false
+			m.panels[3].Revealed = false
+			m.panels[4].Revealed = true
 		case "6":
 			m.selectedTab = 6
-			m.panelGroups[2].ActiveTab = 0
+			m.panels[5].Revealed = true
+			m.panels[6].Revealed = false
 		case "7":
 			m.selectedTab = 7
-			m.panelGroups[2].ActiveTab = 1
+			m.panels[5].Revealed = false
+			m.panels[6].Revealed = true
 		case "up", "k":
 			m.logFollow = false
 			m.logCursor = panels.PrevNewline(m.logFile, m.logCursor)
@@ -207,7 +246,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case tea.WindowSizeMsg:
 		m.screenWidth = v.Width
-		m.screenHeight = v.Height
+		m.screenHeight =  v.Height
 		return m, nil
 	case refreshMsg:
 		return m, m.refreshIBState()
@@ -220,9 +259,9 @@ func (m *model) View() string {
 	if m.screenWidth == 0 || m.screenHeight == 0 {
 		return "loading…"
 	}
-	top := panels.RenderPanelGroup(m.panelGroups[0], m.screenWidth)
-	mid := panels.RenderPanelGroup(m.panelGroups[1], m.screenWidth)
-	bot := panels.RenderPanelGroup(m.panelGroups[2], m.screenWidth)
+	top := panels.RenderHorizontalGroup(m.panels[:2], m.selectedTab, m.screenWidth)
+	mid := panels.RenderHorizontalGroup(m.panels[2:5], m.selectedTab, m.screenWidth)
+	bot := panels.RenderHorizontalGroup(m.panels[5:], m.selectedTab, m.screenWidth)
 
 	return lipgloss.JoinVertical(
 		lipgloss.Left,

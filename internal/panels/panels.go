@@ -6,11 +6,16 @@ import (
 )
 
 var (
-	tabContentStyle = lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(lipgloss.Color("#7D56F4")).
-			Padding(0, 1) // No vertical padding, 1 space horizontal
-	activeTabBorderStyle = lipgloss.NewStyle().
+	activeContentStyle = lipgloss.NewStyle().
+				Border(lipgloss.RoundedBorder()).
+				BorderForeground(lipgloss.Color("#7D56F4")).
+				Padding(0, 1).     // No vertical padding, 1 space horizontal
+				MaxHeight(12)
+	inactiveContentStyle = lipgloss.NewStyle().
+				Border(lipgloss.RoundedBorder()).
+				BorderForeground(lipgloss.Color("#333333")).
+				Padding(0, 1) // No vertical padding, 1 space horizontal
+	activeTabStyle = lipgloss.NewStyle().
 				Bold(true).
 				Foreground(lipgloss.Color("#FFFFFF")).                     // White
 				Background(lipgloss.Color("#7D56F4")).                     // Purple
@@ -18,7 +23,7 @@ var (
 				BorderForeground(lipgloss.Color("#7D56F4")).
 				Padding(0, 1)
 
-	inactiveTabBorderStyle = lipgloss.NewStyle().
+	inactiveTabStyle = lipgloss.NewStyle().
 				Foreground(lipgloss.Color("#666666")). // Grey
 				Background(lipgloss.Color("#1A1A1A")). // Dark background
 				Border(lipgloss.RoundedBorder(), true, true, false, true).
@@ -30,27 +35,32 @@ var (
 			Italic(true)
 )
 
-// A panel group holds the tab and corresponding content string.
-type PanelGroup struct {
-	Tabs      []string
-	Content   []string
-	ActiveTab int
+// An individual tabbed panel.
+type Panel struct {
+	Index    int
+	Tab      string
+	Content  string
+	Revealed bool
 }
 
 // A general renderer to make all panels look the same.
-func RenderPanelGroup(g *PanelGroup, width int) string {
+func RenderHorizontalGroup(panels []*Panel, selectedTab, width int) string {
 	var tabRow []string
-	for i, tab := range g.Tabs {
-		if i == g.ActiveTab {
-			tabRow = append(tabRow, activeTabBorderStyle.Render(tab))
+	content := ""
+	for _, p := range panels {
+		if selectedTab == p.Index {
+			tabRow = append(tabRow, activeTabStyle.Render(p.Tab))
 		} else {
-			tabRow = append(tabRow, inactiveTabBorderStyle.Render(tab))
+			tabRow = append(tabRow, inactiveTabStyle.Render(p.Tab))
+		}
+		if p.Revealed == true {
+			if selectedTab == p.Index {
+				content = activeContentStyle.Width(width - 2).Render(p.Content)
+			} else {
+				content = inactiveContentStyle.Width(width - 2).Render(p.Content)
+			}
 		}
 	}
 	tabBar := lipgloss.JoinHorizontal(lipgloss.Bottom, tabRow...)
-	body := tabContentStyle.
-		MaxHeight(12).
-		Width(width - 2).              // Account for border
-		Render(g.Content[g.ActiveTab]) // Show content for current tab
-	return lipgloss.JoinVertical(lipgloss.Left, tabBar, body)
+	return lipgloss.JoinVertical(lipgloss.Left, tabBar, content)
 }
