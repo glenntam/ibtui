@@ -4,16 +4,34 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
-	"github.com/glenntam/ibtui/internal/panels"
-	"github.com/glenntam/ibtui/internal/state"
-
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/glenntam/ibtui/internal/panels"
+	"github.com/glenntam/ibtui/internal/state"
 	"github.com/scmhub/ibsync"
 	"golang.org/x/term"
+)
+
+const (
+	millisecondRefreshRate = 30
+
+	minTermWidth  = 48
+	minTermHeight = 22
+)
+
+const (
+	nofocus = iota
+	portfolio
+	watchlist
+	quote
+	orders
+	algos
+	logs
+	trades
 )
 
 // Use this type to catch repeated refreshIBState messages in Update().
@@ -22,27 +40,30 @@ type refreshMsg time.Time
 // model reflects the current state of the TUI app.
 // model.ibs reflects the state of the IB account via continued polling.
 type model struct {
-	ib           *ibsync.IB
-	ibs          *state.IBState
-	timezone     string
-	currentTime  string
+	ib       *ibsync.IB
+	ibs      *state.IBState
+	timezone string
 
-	logFile      *os.File
-	logHeight    int
-	logLines     []string
-	logCursor    int64
-	logFollow    bool
+	logFile   *os.File
+	logHeight int
+	logLines  []string
+	logCursor int64
+	logFollow bool
 
-	lastUpdate   time.Time
-	panels       []*panels.Panel
-	selectedTab  int
-	screenWidth  int
-	screenHeight int
+	panels          []*panels.Panel
+	prevSelectedTab int
+	selectedTab     int
+	screenWidth     int
+	screenHeight    int
 }
 
 // Render the Portfolio panel into a string for further Bubbletea rendering.
 func (m *model) renderPorfolioContent() string {
-	return fmt.Sprintf("%s (%v)", m.ibs.CurrentTime.Format(time.StampMilli), m.ibs.CurrentTime.Location())
+	return fmt.Sprintf(
+		"%s (%v)",
+		m.ibs.CurrentTime.Format(time.StampMilli),
+		m.ibs.CurrentTime.Location(),
+	)
 }
 
 // Render the Watchlist panel into a string for further Bubbletea rendering.
@@ -67,11 +88,13 @@ func (m *model) renderAlgoContent() string {
 
 // Render the Log panel into a string for further Bubbletea rendering.
 func (m *model) renderLogContent() string {
-	if panels.CursorAtEOF(m.logFile, m.logCursor) == true {
-		m.logFollow = true
+	var err error
+	m.logFollow, err = panels.CursorAtEOF(m.logFile, m.logCursor)
+	if err != nil {
+		slog.Error("Couldn't determine if cursor at end of file", "error", err)
 	}
-	var offset int64 = m.logCursor
-	if m.logFollow == true {
+	offset := m.logCursor
+	if m.logFollow {
 		fileInfo, err := m.logFile.Stat()
 		if err != nil {
 			slog.Warn("Couldn't stat log file during log tab render")
@@ -79,10 +102,12 @@ func (m *model) renderLogContent() string {
 			offset = fileInfo.Size()
 		}
 	}
-	m.logLines = panels.RenderLog(m.logFile, offset, 10, m.screenWidth-4)
-
+	m.logLines, err = panels.RenderLog(m.logFile, offset, m.logHeight, m.screenWidth)
+	if err != nil {
+		slog.Error("Couldn't render log display", "error", err)
+	}
 	str := strings.Join(m.logLines, "\n")
-	strings.TrimRight(str, "\r\n")
+	str = strings.TrimRight(str, "\r\n")
 
 	return str
 }
@@ -96,28 +121,34 @@ func (m *model) renderTradeLogContent() string {
 // TUI model fields, and then set itself to repeat.
 func (m *model) refreshIBState() tea.Cmd {
 	// Portfolio tab:
-	m.ibs.ReqCurrentTimeMilli(m.ib, m.timezone)
+	err := m.ibs.ReqCurrentTimeMilli(m.ib)
+	if err != nil {
+		slog.Error("Couldn't get time from IB API", "error", err)
+	}
 
 	// Log tab:
-	if m.logFollow == true {
-		m.logCursor = panels.GetFileSize(m.logFile)
-		m.panels[5].Tab = "6. Log"
+	if m.logFollow {
+		m.logCursor, err = panels.GetFileSize(m.logFile)
+		if err != nil {
+			slog.Error("m.logCursor couldn't retrieve file size", "error", err)
+		}
+		m.panels[logs].Tab = "6. Log "
 	} else {
-		m.panels[5].Tab = "6. Log*"
+		m.panels[logs].Tab = "6. Log*"
 	}
 
 	// Render All tabs:
-	m.panels[0].Content = m.renderPorfolioContent()
-	m.panels[1].Content = m.renderWatchlistContent()
-	m.panels[2].Content = m.renderOrderEntryContent()
-	m.panels[3].Content = m.renderOpenOrdersContent()
-	m.panels[4].Content = m.renderAlgoContent()
-	m.panels[5].Content = m.renderLogContent()
-	m.panels[6].Content = m.renderTradeLogContent()
+	m.panels[portfolio].Content = m.renderPorfolioContent()
+	m.panels[watchlist].Content = m.renderWatchlistContent()
+	m.panels[quote].Content = m.renderOrderEntryContent()
+	m.panels[orders].Content = m.renderOpenOrdersContent()
+	m.panels[algos].Content = m.renderAlgoContent()
+	m.panels[logs].Content = m.renderLogContent()
+	m.panels[trades].Content = m.renderTradeLogContent()
 
 	// Re-run timer:
 	return tea.Batch(
-		tea.Tick(30*time.Millisecond, func(t time.Time) tea.Msg {
+		tea.Tick(millisecondRefreshRate*time.Millisecond, func(t time.Time) tea.Msg {
 			return refreshMsg(t)
 		}),
 	)
@@ -125,114 +156,160 @@ func (m *model) refreshIBState() tea.Cmd {
 
 // Called once at init before the TUI loops. Use it to kick off a cmd.
 func (m *model) Init() tea.Cmd {
-	logFileSize := panels.GetFileSize(m.logFile)
-	m.logCursor = logFileSize
+	var err error
+	m.logCursor, err = panels.GetFileSize(m.logFile)
+	if err != nil {
+		slog.Error("m.logCursor couldn't retrieve log file size", "error", err)
+	}
 
 	// Use x/term to temporarily get init screen width/height before passing to TUI:
 	termWidth, termHeight, err := term.GetSize(int(os.Stdout.Fd()))
 	if err != nil {
-		termWidth = 48
-		termHeight = 22
+		termWidth = minTermWidth
+		termHeight = minTermHeight
 	}
 	m.screenWidth = termWidth
 	m.screenHeight = termHeight
 
 	// Initialize panels:
 	m.panels = append(m.panels, &panels.Panel{
-		Index: 1,
-		Tab: "1. Porfolio",
-		Content: m.renderPorfolioContent(),
+		Index: nofocus,
+	})
+	m.panels = append(m.panels, &panels.Panel{
+		Index:    portfolio,
+		Tab:      "1. Porfolio",
+		Content:  m.renderPorfolioContent(),
 		Revealed: true,
 	})
 	m.panels = append(m.panels, &panels.Panel{
-		Index: 2,
-		Tab: "2. Watchlist",
-		Content: m.renderWatchlistContent(),
+		Index:    watchlist,
+		Tab:      "2. Watchlist",
+		Content:  m.renderWatchlistContent(),
 		Revealed: false,
 	})
 	m.panels = append(m.panels, &panels.Panel{
-		Index: 3,
-		Tab: "3. Quote / Order Entry",
-		Content: m.renderOrderEntryContent(),
+		Index:    quote,
+		Tab:      "3. Quote / Order Entry",
+		Content:  m.renderOrderEntryContent(),
 		Revealed: true,
 	})
 	m.panels = append(m.panels, &panels.Panel{
-		Index: 4,
-		Tab: "4. Open Orders",
-		Content: m.renderOpenOrdersContent(),
+		Index:    orders,
+		Tab:      "4. Open Orders",
+		Content:  m.renderOpenOrdersContent(),
 		Revealed: false,
 	})
 	m.panels = append(m.panels, &panels.Panel{
-		Index: 5,
-		Tab: "5. Algos",
-		Content: m.renderAlgoContent(),
+		Index:    algos,
+		Tab:      "5. Algos",
+		Content:  m.renderAlgoContent(),
 		Revealed: false,
 	})
 	m.panels = append(m.panels, &panels.Panel{
-		Index: 6,
-		Tab: "6. Log",
-		Content: m.renderLogContent(),
+		Index:    logs,
+		Tab:      "6. Log ",
+		Content:  m.renderLogContent(),
 		Revealed: true,
 	})
 	m.panels = append(m.panels, &panels.Panel{
-		Index: 7,
-		Tab: "7. Trade Log",
-		Content: m.renderTradeLogContent(),
+		Index:    trades,
+		Tab:      "7. Trade Log",
+		Content:  m.renderTradeLogContent(),
 		Revealed: false,
 	})
-	m.selectedTab = 0
+	m.prevSelectedTab = nofocus
+	m.selectedTab = nofocus
 	slog.Info("TUI initializing")
 	return m.refreshIBState()
 }
 
 // Catch keypresses and screen updates here, then pass to View().
-func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) { //nolint:ireturn
+	var err error
 	switch v := msg.(type) {
 	case tea.KeyMsg:
 		switch v.String() {
 		case "ctrl+c", "q":
 			return m, tea.Quit
-		case "1":
-			m.selectedTab = 1
-			m.panels[0].Revealed = true
-			m.panels[1].Revealed = false
-		case "2":
-			m.selectedTab = 2
-			m.panels[0].Revealed = false
-			m.panels[1].Revealed = true
-		case "3":
-			m.selectedTab = 3
-			m.panels[2].Revealed = true
-			m.panels[3].Revealed = false
-			m.panels[4].Revealed = false
-		case "4":
-			m.selectedTab = 4
-			m.panels[2].Revealed = false
-			m.panels[3].Revealed = true
-			m.panels[4].Revealed = false
-		case "5":
-			m.selectedTab = 5
-			m.panels[2].Revealed = false
-			m.panels[3].Revealed = false
-			m.panels[4].Revealed = true
-		case "6":
-			m.selectedTab = 6
-			m.panels[5].Revealed = true
-			m.panels[6].Revealed = false
-		case "7":
-			m.selectedTab = 7
-			m.panels[5].Revealed = false
-			m.panels[6].Revealed = true
+		case strconv.Itoa(portfolio):
+			if m.selectedTab == portfolio {
+				m.selectedTab = nofocus
+			} else {
+				m.selectedTab = portfolio
+				m.panels[portfolio].Revealed = true
+				m.panels[watchlist].Revealed = false
+			}
+		case strconv.Itoa(watchlist):
+			if m.selectedTab == watchlist {
+				m.selectedTab = nofocus
+			} else {
+				m.selectedTab = watchlist
+				m.panels[portfolio].Revealed = false
+				m.panels[watchlist].Revealed = true
+			}
+		case strconv.Itoa(quote):
+			if m.selectedTab == quote {
+				m.selectedTab = nofocus
+			} else {
+				m.selectedTab = quote
+				m.panels[quote].Revealed = true
+				m.panels[orders].Revealed = false
+				m.panels[algos].Revealed = false
+			}
+		case strconv.Itoa(orders):
+			if m.selectedTab == orders {
+				m.selectedTab = nofocus
+			} else {
+				m.selectedTab = orders
+				m.panels[quote].Revealed = false
+				m.panels[orders].Revealed = true
+				m.panels[algos].Revealed = false
+			}
+		case strconv.Itoa(algos):
+			if m.selectedTab == algos {
+				m.selectedTab = nofocus
+			} else {
+				m.selectedTab = algos
+				m.panels[quote].Revealed = false
+				m.panels[orders].Revealed = false
+				m.panels[algos].Revealed = true
+			}
+		case strconv.Itoa(logs):
+			if m.selectedTab == logs {
+				m.selectedTab = nofocus
+			} else {
+				m.selectedTab = logs
+				m.panels[logs].Revealed = true
+				m.panels[trades].Revealed = false
+			}
+		case strconv.Itoa(trades):
+			if m.selectedTab == trades {
+				m.selectedTab = nofocus
+			} else {
+				m.selectedTab = trades
+				m.panels[logs].Revealed = false
+				m.panels[trades].Revealed = true
+			}
 		case "up", "k":
 			m.logFollow = false
-			m.logCursor = panels.PrevNewline(m.logFile, m.logCursor)
+			m.logCursor, err = panels.PrevNewline(m.logFile, m.logCursor)
+			if err != nil {
+				slog.Error("Error getting previous newline", "error", err)
+			}
 		case "down", "j":
-			m.logCursor = panels.NextNewline(m.logFile, m.logCursor)
-			if panels.CursorAtEOF(m.logFile, m.logCursor) == true {
-				m.logFollow = true
+			m.logCursor, err = panels.NextNewline(m.logFile, m.logCursor)
+			if err != nil {
+				slog.Error("Error getting next newline", "error", err)
+			}
+			m.logFollow, err = panels.CursorAtEOF(m.logFile, m.logCursor)
+			if err != nil {
+				slog.Error("Couldn't determine if cursor at end of file", "error", err)
 			}
 		case "G":
-			m.logCursor = panels.GetFileSize(m.logFile)
+			m.logCursor, err = panels.GetFileSize(m.logFile)
+			if err != nil {
+				slog.Error("m.logCursor couldn't retrieve log file size", "error", err)
+			}
 			m.logFollow = true
 		case "d":
 			slog.Debug("emit Debug")
@@ -246,7 +323,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case tea.WindowSizeMsg:
 		m.screenWidth = v.Width
-		m.screenHeight =  v.Height
+		m.screenHeight = v.Height
 		return m, nil
 	case refreshMsg:
 		return m, m.refreshIBState()
@@ -256,18 +333,22 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // Based on the TUI model state, render the data to screen.
 func (m *model) View() string {
-	if m.screenWidth == 0 || m.screenHeight == 0 {
-		return "loading…"
-	}
-	top := panels.RenderHorizontalGroup(m.panels[:2], m.selectedTab, m.screenWidth)
-	mid := panels.RenderHorizontalGroup(m.panels[2:5], m.selectedTab, m.screenWidth)
-	bot := panels.RenderHorizontalGroup(m.panels[5:], m.selectedTab, m.screenWidth)
-
-	return lipgloss.JoinVertical(
-		lipgloss.Left,
-		top,
-		mid,
-		bot,
-		"STATUS LINE",
+	top := panels.RenderHorizontalGroup(
+		m.panels[portfolio:quote],
+		m.selectedTab,
+		m.screenWidth,
 	)
+	mid := panels.RenderHorizontalGroup(
+		m.panels[quote:logs],
+		m.selectedTab,
+		m.screenWidth,
+	)
+	bot := panels.RenderHorizontalGroup(
+		m.panels[logs:],
+		m.selectedTab,
+		m.screenWidth,
+	)
+	status := panels.RenderStatusLine("STATUS LINE")
+
+	return lipgloss.JoinVertical(lipgloss.Left, top, mid, bot, status)
 }

@@ -1,25 +1,26 @@
-// Custom bridge to pipe zerolog logger entries to log/slog logger.
+// Package zerobridge pipes zerolog logger entries to log/slog logger.
 package zerobridge
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"strings"
 )
 
-// Container for log/slog logger.
+// ZerologToSlogBridge contains a log/slog logger.
 type ZerologToSlogBridge struct {
 	Slogger *slog.Logger
 }
 
-// Overload zerlolog Write() to conform to log/slog format.
-func (b *ZerologToSlogBridge) Write(p []byte) (n int, err error) {
+// Write overloads zerlolog's original Write to conform to log/slog format.
+func (b *ZerologToSlogBridge) Write(p []byte) (int, error) {
 	// Parse the zerolog JSON output
 	var logEntry map[string]interface{}
-	if err := json.Unmarshal(p, &logEntry); err != nil {
-		// If not JSON, just log as info with raw content
-		b.Slogger.Info("zerolog", "raw", strings.TrimSpace(string(p)))
-		return len(p), nil
+	err := json.Unmarshal(p, &logEntry)
+	if err != nil { // If not JSON, just log as info with raw content
+		return len(p), fmt.Errorf("couldn't unmarshal zerolog message (%v): %w", strings.TrimSpace(string(p)), err)
 	}
 	// Extract standard fields
 	level, _ := logEntry["level"].(string)
@@ -34,15 +35,15 @@ func (b *ZerologToSlogBridge) Write(p []byte) (n int, err error) {
 	// Convert zerolog level to slog levels
 	switch level {
 	case "debug":
-		b.Slogger.LogAttrs(nil, slog.LevelDebug, message, attrs...)
+		b.Slogger.LogAttrs(context.TODO(), slog.LevelDebug, message, attrs...)
 	case "info":
-		b.Slogger.LogAttrs(nil, slog.LevelInfo, message, attrs...)
+		b.Slogger.LogAttrs(context.TODO(), slog.LevelInfo, message, attrs...)
 	case "warn":
-		b.Slogger.LogAttrs(nil, slog.LevelWarn, message, attrs...)
+		b.Slogger.LogAttrs(context.TODO(), slog.LevelWarn, message, attrs...)
 	case "error":
-		b.Slogger.LogAttrs(nil, slog.LevelError, message, attrs...)
+		b.Slogger.LogAttrs(context.TODO(), slog.LevelError, message, attrs...)
 	default:
-		b.Slogger.LogAttrs(nil, slog.LevelInfo, message, attrs...)
+		b.Slogger.LogAttrs(context.TODO(), slog.LevelInfo, message, attrs...)
 	}
 	return len(p), nil
 }

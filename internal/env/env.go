@@ -1,4 +1,4 @@
-// Custom package to retrive config settings from .env variables.
+// Package env retrieves config settings from .env variables.
 package env
 
 import (
@@ -9,7 +9,7 @@ import (
 	"github.com/joho/godotenv"
 )
 
-// Parse .env variables to Go struct
+// Config contains parsed .env variables specific to the app
 type Config struct {
 	Host          string
 	Port          int
@@ -24,14 +24,16 @@ type Config struct {
 	SMTPRecipient string
 }
 
-// Get environment variables from .env file.
+// ParseDotEnv gets environment variables from .env file.
 // A file called ".env" must be located where the binary is run.
-// If .env exists but required environment variables are not found,
+// If .env exists but required configs variables are not found,
 // then reasonable default values are used.
 func ParseDotEnv() *Config {
 	err := godotenv.Load()
 	if err != nil {
-		fmt.Println(".env file not found! Please create one. \n\n A sample template file called .env-example is included for your reference")
+		fmt.Println(
+			".env file not found! Please create one. \n\n A sample template file called .env-example is included for your reference",
+		)
 		os.Exit(1)
 	}
 

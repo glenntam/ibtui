@@ -1,4 +1,4 @@
-// A custom log/slog logger for ibtui
+// Package logger is a custom log/slog file and email logger.
 package logger
 
 import (
@@ -12,16 +12,18 @@ import (
 	"github.com/glenntam/ibtui/internal/smtp"
 )
 
-// A simple SMTP logging handler that includes an SMTP client
+// SMTPHandler passes minLevel and above slog messages to the smtp client.
 type SMTPHandler struct {
 	minLevel slog.Level
-	smtp     *smtp.SMTPClient
+	smtp     *smtp.Client
 }
 
+// Enabled determines if a slog message will be passed to the smtp client.
 func (h *SMTPHandler) Enabled(_ context.Context, level slog.Level) bool {
 	return level >= h.minLevel
 }
 
+// Handle the emailing of the slog message.
 func (h *SMTPHandler) Handle(_ context.Context, r slog.Record) error {
 	if r.Level < h.minLevel {
 		return nil
@@ -33,26 +35,37 @@ func (h *SMTPHandler) Handle(_ context.Context, r slog.Record) error {
 		return true
 	})
 
-	msg := fmt.Sprintf("Level: %s\nTime: %s\nMessage: %s\nAttributes: %s",
-		r.Level.String(), r.Time.Format(time.RFC3339), r.Message, buf.String())
-
-	return h.smtp.Send("Log Alert", msg, h.smtp.Recipient)
+	msg := fmt.Sprintf(
+		"Level: %s\nTime: %s\nMessage: %s\nAttributes: %s",
+		r.Level.String(),
+		r.Time.Format(time.RFC3339),
+		r.Message,
+		buf.String(),
+	)
+	err := h.smtp.Send("Log Alert", msg, h.smtp.Recipient)
+	if err != nil {
+		return fmt.Errorf("logger couldn't send email: %w", err)
+	}
+	return nil
 }
 
-func (h *SMTPHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
+// WithAttrs satisfies handler interface.
+func (h *SMTPHandler) WithAttrs(_ []slog.Attr) slog.Handler {
 	return h
 }
 
-func (h *SMTPHandler) WithGroup(name string) slog.Handler {
+// WithGroup satisfies handler interface.
+func (h *SMTPHandler) WithGroup(_ string) slog.Handler {
 	return h
 }
 
-// A logging handler that can contain multiple different type of handlers.
-// In the case of ibtui, a JSON file logger and (optional) smtp emailer.
+// MultiHandler can contain multiple different types of logging handlers.
+// In the case of ibtui, it is a JSON file logger and (optional) smtp emailer.
 type MultiHandler struct {
 	handlers []slog.Handler
 }
 
+// Enabled determines if a slog message will be processed.
 func (m *MultiHandler) Enabled(ctx context.Context, level slog.Level) bool {
 	for _, h := range m.handlers {
 		if h.Enabled(ctx, level) {
@@ -62,6 +75,7 @@ func (m *MultiHandler) Enabled(ctx context.Context, level slog.Level) bool {
 	return false
 }
 
+// Handle determines how a slog message will be processed.
 func (m *MultiHandler) Handle(ctx context.Context, r slog.Record) error {
 	for _, h := range m.handlers {
 		if h.Enabled(ctx, r.Level) {
@@ -71,6 +85,7 @@ func (m *MultiHandler) Handle(ctx context.Context, r slog.Record) error {
 	return nil
 }
 
+// WithAttrs satisfies handler interface.
 func (m *MultiHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
 	hs := make([]slog.Handler, len(m.handlers))
 	for i, h := range m.handlers {
@@ -79,6 +94,7 @@ func (m *MultiHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
 	return &MultiHandler{handlers: hs}
 }
 
+// WithGroup satisfies handler interface.
 func (m *MultiHandler) WithGroup(name string) slog.Handler {
 	hs := make([]slog.Handler, len(m.handlers))
 	for i, h := range m.handlers {
@@ -87,11 +103,11 @@ func (m *MultiHandler) WithGroup(name string) slog.Handler {
 	return &MultiHandler{handlers: hs}
 }
 
-// Create a custom multi-logger that implements log/slog.Logger
+// New creates a custom multi-logger that implements log/slog.Logger
 //
-// DEBUG and above:    Save to log file.
+// DEBUG and above:   Save to log file.
 // WARNING and above: Email (but only if smtp.AdminEmail is provided).
-func New(file *os.File, smtpClient *smtp.SMTPClient) (*slog.Logger, error) {
+func New(file *os.File, smtpClient *smtp.Client) *slog.Logger {
 	// stdoutHandler := slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
 	//     Level: slog.LevelDebug,
 	// })
@@ -111,5 +127,5 @@ func New(file *os.File, smtpClient *smtp.SMTPClient) (*slog.Logger, error) {
 		multi.handlers = []slog.Handler{fileHandler}
 	}
 	slog.SetDefault(slog.New(multi))
-	return slog.New(multi), nil
+	return slog.New(multi)
 }

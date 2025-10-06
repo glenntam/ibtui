@@ -7,16 +7,20 @@ import (
 	"os"
 	"time"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/glenntam/ibtui/internal/env"
 	"github.com/glenntam/ibtui/internal/logger"
 	"github.com/glenntam/ibtui/internal/smtp"
 	"github.com/glenntam/ibtui/internal/state"
 	"github.com/glenntam/ibtui/internal/zerobridge"
-
-	tea "github.com/charmbracelet/bubbletea"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/scmhub/ibsync"
+)
+
+const (
+	logLinesDisplayed = 10
+	logFilePermission = 0o600 // RW for owner only
 )
 
 // Assemble ibtui top-level components, including config, logger and tui.
@@ -31,7 +35,7 @@ func main() {
 		time.Local = timezone
 	}
 
-	smtp := smtp.NewSMTPClient(
+	smtp := smtp.NewClient(
 		cfg.SMTPPort,
 		cfg.SMTPHost,
 		cfg.SMTPUsername,
@@ -39,17 +43,17 @@ func main() {
 		cfg.SMTPSender,
 		cfg.SMTPRecipient)
 
-	logFile, err := os.OpenFile(cfg.LogFile, os.O_CREATE|os.O_RDWR|os.O_APPEND, 0o666)
+	logFile, err := os.OpenFile(cfg.LogFile,
+		os.O_CREATE|os.O_RDWR|os.O_APPEND,
+		logFilePermission,
+	)
 	if err != nil {
-		fmt.Println("OS Error: Unable to open nor create %v\n", cfg.LogFile)
+		fmt.Printf("OS Error: Unable to open nor create %v\n", cfg.LogFile)
 		os.Exit(1)
 	}
-	defer logFile.Close()
+	defer closeLogFile(logFile)
 
-	slogger, err := logger.New(logFile, smtp)
-	if err != nil {
-		slog.Error("Couldn't start new slogger", "error", err)
-	}
+	slogger := logger.New(logFile, smtp)
 	slog.SetDefault(slogger)
 	// (pipe ibsync's internal zerologger to stdlib slog)
 	bridge := &zerobridge.ZerologToSlogBridge{Slogger: slogger}
@@ -65,7 +69,7 @@ func main() {
 		ibs:       ibs,
 		timezone:  cfg.Timezone,
 		logFile:   logFile,
-		logHeight: 10,
+		logHeight: logLinesDisplayed,
 		logFollow: true,
 	}
 
@@ -79,21 +83,42 @@ func main() {
 	if err = ib.Connect(ibCfg); err != nil {
 		slog.Error("Couldn't connect to IB", "error", err)
 	}
-	defer cleanup(ib)
+	defer disconnect(ib)
 
 	p := tea.NewProgram(tui, tea.WithAltScreen())
 	if _, err := p.Run(); err != nil {
 		slog.Error("Couldn't run bubbletea", "error", err)
 	}
-	return
+}
+
+// A deferred cleanup function to close previously opened log file.
+func closeLogFile(f *os.File) {
+	if f == nil {
+		return
+	}
+	err := f.Close()
+	if err != nil {
+		if slog.Default() != nil {
+			slog.Error("Failed to close log file", "error", err)
+		} else {
+			fmt.Fprintf(os.Stderr, "Failed to close log file: %v\n", err)
+		}
+	}
 }
 
 // A deferred cleanup function to gracefully disconnect from IB API.
-func cleanup(ib *ibsync.IB) {
-	if err := ib.Disconnect(); err != nil {
-		slog.Error("Couldn't disconnect IB", "error", err)
+func disconnect(ib *ibsync.IB) {
+	if ib == nil {
+		return
+	}
+	err := ib.Disconnect()
+	if err != nil {
+		if slog.Default() != nil {
+			slog.Error("Couldn't disconnect IB", "error", err)
+		} else {
+			fmt.Fprintf(os.Stderr, "Couldn't disconnect IB: %v\n", err)
+		}
 	} else {
 		slog.Info("Gracefully disconnected")
 	}
-	return
 }

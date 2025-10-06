@@ -1,5 +1,4 @@
-// A simple SMTP client to email messages.
-// In this case used to email log messages.
+// Package smtp is a simple SMTP client to email log messages.
 package smtp
 
 import (
@@ -7,8 +6,8 @@ import (
 	"net/smtp"
 )
 
-// Config settings for simple SMTP client.
-type SMTPClient struct {
+// Client contains config settings for a simple SMTP client.
+type Client struct {
 	Host      string
 	Port      int
 	Username  string
@@ -17,9 +16,9 @@ type SMTPClient struct {
 	Recipient string
 }
 
-// Init a simple SMTP client.
-func NewSMTPClient(port int, host, username, password, sender, recipient string) *SMTPClient {
-	return &SMTPClient{
+// NewClient initializes a simple SMTP client.
+func NewClient(port int, host, username, password, sender, recipient string) *Client {
+	return &Client{
 		Host:      host,
 		Port:      port,
 		Username:  username,
@@ -30,9 +29,13 @@ func NewSMTPClient(port int, host, username, password, sender, recipient string)
 }
 
 // Send a simple email based on previously set config settings.
-func (c *SMTPClient) Send(subject, body, recipient string) error {
+func (c *Client) Send(subject, body, recipient string) error {
 	addr := fmt.Sprintf("%s:%d", c.Host, c.Port)
 	auth := smtp.PlainAuth("", c.Username, c.Password, c.Host)
 	msg := fmt.Sprintf("To: %s\r\nSubject: %s\r\n\r\n%s", recipient, subject, body)
-	return smtp.SendMail(addr, auth, c.Sender, []string{recipient}, []byte(msg))
+	err := smtp.SendMail(addr, auth, c.Sender, []string{recipient}, []byte(msg))
+	if err != nil {
+		return fmt.Errorf("SMTP Client couldn't send mail. Error: %w", err)
+	}
+	return nil
 }

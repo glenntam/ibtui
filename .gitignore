@@ -1,13 +1,7 @@
 # ibtui specific:
 .env
 logfile.json
-
-# ibtui dev specfic build helpers and artifacts
-/t
-/tui
-/gomodupdate
-
-
+/ibtui
 
 # github golang template:
 # If you prefer the allow list template instead of the deny list, see community template:
