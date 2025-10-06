@@ -1,4 +1,4 @@
-// Package panels contains the components for various different panels displayed.
+// Package panels contains styling components to render strings for a TUI.
 package panels
 
 import (
@@ -10,6 +10,7 @@ import (
 const (
 	colorSelected = lipgloss.Color("#7D56f4") // Purple
 	colorDimmed   = lipgloss.Color("#666666") // Dark gray
+	bordersWidth  = 2
 )
 
 var (
@@ -24,8 +25,8 @@ var (
 			BottomLeft:  "└",
 			BottomRight: "┘",
 		}, true)
-		//Height(10).
-		//MaxHeight(12)
+		// Height(10).
+		// MaxHeight(12)
 
 	activeContentStyle = lipgloss.NewStyle().
 				Inherit(baseContentStyle).
@@ -102,12 +103,10 @@ var (
 			BottomRight: "╮",
 		}, false, true, true)
 
-	statusStyle = lipgloss.NewStyle().
-		//Foreground(lipgloss.Color("#666666")).
-		Italic(true)
+	statusStyle = lipgloss.NewStyle().Bold(true)
 )
 
-// An individual tabbed panel.
+// Panel represents a a horizontal grouping of tabs.
 type Panel struct {
 	Index    int
 	Tab      string
@@ -115,20 +114,14 @@ type Panel struct {
 	Revealed bool
 }
 
-// Helper struct to style tabs.
-type tab struct {
-	tab   string
-	style lipgloss.Style
-}
-
-// A general renderer to make all panel groups to look the same.
+// RenderHorizontalGroup styles a panel grouping into horizontal tabs.
 func RenderHorizontalGroup(panels []*Panel, selectedTab, width int) string {
+	var content string
 	var focused bool
 	var style lipgloss.Style
-	var content string
-	var tabRow []string
-	var tabs []tab
-
+	styles := make([]lipgloss.Style, 0)
+	tabs := make([]string, 0)
+	tabRow := make([]string, 0)
 	tabsLength := 0
 
 	for i, p := range panels {
@@ -149,47 +142,53 @@ func RenderHorizontalGroup(panels []*Panel, selectedTab, width int) string {
 		// Add coloring to tab based on focus
 		if selectedTab == p.Index {
 			focused = true
-			style = style.Copy().Inherit(activeTabStyle)
+			style = style.Inherit(activeTabStyle)
 			// Restyle previous tabs accordingly, if necessary
 			if i > 0 {
 				for j := i; j > 0; j-- {
-					tabs[j-1].style = tabs[j-1].style.Copy().BorderBottomForeground(colorSelected)
+					styles[j-1] = styles[j-1].BorderBottomForeground(colorSelected)
 				}
 			}
 		} else {
-			style = style.Copy().Inherit(inactiveTabStyle)
+			style = style.Inherit(inactiveTabStyle)
 			if focused {
-				style = style.Copy().BorderBottomForeground(colorSelected)
+				style = style.BorderBottomForeground(colorSelected)
 			}
 		}
-		tabs = append(tabs, tab{tab: p.Tab, style: style.Copy()})
-
-		// Get the total string length of the tab element, including any border
-		//tabsLength += lipgloss.Width(tabs[len(tabs)-1].tab)
+		tabs = append(tabs, p.Tab)
+		styles = append(styles, style)
 
 		// Content styling
 		if p.Revealed {
 			if selectedTab == p.Index {
-				content = activeContentStyle.Width(width - 2).Render(p.Content)
+				content = activeContentStyle.Width(width - bordersWidth).Render(p.Content)
 			} else {
-				content = inactiveContentStyle.Width(width - 2).Render(p.Content)
+				content = inactiveContentStyle.Width(width - bordersWidth).Render(p.Content)
 			}
 		}
 	}
 
 	for i, t := range tabs {
-		tabRow = append(tabRow, t.style.Render(t.tab))
+		tabRow = append(tabRow, styles[i].Render(t))
 		tabsLength += lipgloss.Width(tabRow[i])
 	}
 
 	// Final trailing tab
 	if focused {
-		style = trailingTabStyle.Copy().Inherit(activeTabStyle)
+		style = trailingTabStyle.Inherit(activeTabStyle)
 	} else {
-		style = trailingTabStyle.Copy().Inherit(inactiveTabStyle)
+		style = trailingTabStyle.Inherit(inactiveTabStyle)
 	}
-	tabRow = append(tabRow, style.Render(strings.Repeat(" ", width-tabsLength-2)))
+	tabRow = append(tabRow,
+		style.Render(strings.Repeat(" ", width-tabsLength-bordersWidth)),
+	)
 
 	tabBar := lipgloss.JoinHorizontal(lipgloss.Bottom, tabRow...)
 	return lipgloss.JoinVertical(lipgloss.Left, tabBar, content)
+}
+
+// RenderStatusLine styles the bottom status line of the TUI.
+// :TODO Dynamically show allowed keypresses depending on context.
+func RenderStatusLine(status string) string {
+	return statusStyle.Render(status)
 }
