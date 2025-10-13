@@ -1,5 +1,3 @@
-// Package panels (log.go) contains helper functions to compile
-// log file entries into format suitable for TUI consumption.
 package panels
 
 import (
@@ -127,13 +125,13 @@ func RenderLog(f *os.File, pos int64, n, w int) ([]string, error) {
 		// Separately handle "level"
 		level, ok := lineObj["level"].(string)
 		if !ok {
-			return nil, fmt.Errorf("couldn't render log slice because log entry in log file (line #%v) didn't have a log level: %w", l, err)
+			return nil, fmt.Errorf("log entry in log file (line #%v) didn't have a log level: %w", l, err)
 		}
 		delete(lineObj, "level")
 		// Separately handle "time"
 		timestamp, ok := lineObj["time"].(string)
 		if !ok {
-			return nil, fmt.Errorf("couldn't render log slice because log entry in log file (line #%v) didn't have a timestamp: %w", l, err)
+			return nil, fmt.Errorf("log entry in log file (line #%v) didn't have a timestamp: %w", l, err)
 		}
 		delete(lineObj, "time")
 		t, err := time.Parse(time.RFC3339Nano, timestamp)

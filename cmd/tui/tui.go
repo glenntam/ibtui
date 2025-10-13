@@ -51,110 +51,14 @@ type model struct {
 	logFollow bool
 
 	panels          []*panels.Panel
+	styling         *panels.Styles
 	prevSelectedTab int
 	selectedTab     int
 	screenWidth     int
 	screenHeight    int
 }
 
-// Render the Portfolio panel into a string for further Bubbletea rendering.
-func (m *model) renderPorfolioContent() string {
-	return fmt.Sprintf(
-		"%s (%v)",
-		m.ibs.CurrentTime.Format(time.StampMilli),
-		m.ibs.CurrentTime.Location(),
-	)
-}
-
-// Render the Watchlist panel into a string for further Bubbletea rendering.
-func (m *model) renderWatchlistContent() string {
-	return "renderWatchlistTab"
-}
-
-// Render the Order Entry panel into a string for further Bubbletea rendering.
-func (m *model) renderOrderEntryContent() string {
-	return "renderOrderEntryTab"
-}
-
-// Render the Open Orders panel into a string for further Bubbletea rendering.
-func (m *model) renderOpenOrdersContent() string {
-	return "renderOpenOrdersTab"
-}
-
-// Render the Algo panel into a string for further Bubbletea rendering.
-func (m *model) renderAlgoContent() string {
-	return "renderAlgoTab"
-}
-
-// Render the Log panel into a string for further Bubbletea rendering.
-func (m *model) renderLogContent() string {
-	var err error
-	m.logFollow, err = panels.CursorAtEOF(m.logFile, m.logCursor)
-	if err != nil {
-		slog.Error("Couldn't determine if cursor at end of file", "error", err)
-	}
-	offset := m.logCursor
-	if m.logFollow {
-		fileInfo, err := m.logFile.Stat()
-		if err != nil {
-			slog.Warn("Couldn't stat log file during log tab render")
-		} else {
-			offset = fileInfo.Size()
-		}
-	}
-	m.logLines, err = panels.RenderLog(m.logFile, offset, m.logHeight, m.screenWidth)
-	if err != nil {
-		slog.Error("Couldn't render log display", "error", err)
-	}
-	str := strings.Join(m.logLines, "\n")
-	str = strings.TrimRight(str, "\r\n")
-
-	return str
-}
-
-// Render the completed Trades panel into a string.
-func (m *model) renderTradeLogContent() string {
-	return "renderTradeLogTab"
-}
-
-// Catchall function to gather IB account state, update
-// TUI model fields, and then set itself to repeat.
-func (m *model) refreshIBState() tea.Cmd {
-	// Portfolio tab:
-	err := m.ibs.ReqCurrentTimeMilli(m.ib)
-	if err != nil {
-		slog.Error("Couldn't get time from IB API", "error", err)
-	}
-
-	// Log tab:
-	if m.logFollow {
-		m.logCursor, err = panels.GetFileSize(m.logFile)
-		if err != nil {
-			slog.Error("m.logCursor couldn't retrieve file size", "error", err)
-		}
-		m.panels[logs].Tab = "6. Log "
-	} else {
-		m.panels[logs].Tab = "6. Log*"
-	}
-
-	// Render All tabs:
-	m.panels[portfolio].Content = m.renderPorfolioContent()
-	m.panels[watchlist].Content = m.renderWatchlistContent()
-	m.panels[quote].Content = m.renderOrderEntryContent()
-	m.panels[orders].Content = m.renderOpenOrdersContent()
-	m.panels[algos].Content = m.renderAlgoContent()
-	m.panels[logs].Content = m.renderLogContent()
-	m.panels[trades].Content = m.renderTradeLogContent()
-
-	// Re-run timer:
-	return tea.Batch(
-		tea.Tick(millisecondRefreshRate*time.Millisecond, func(t time.Time) tea.Msg {
-			return refreshMsg(t)
-		}),
-	)
-}
-
-// Called once at init before the TUI loops. Use it to kick off a cmd.
+// Init is called once before the TUI loops. Use it to kick off a cmd.
 func (m *model) Init() tea.Cmd {
 	var err error
 	m.logCursor, err = panels.GetFileSize(m.logFile)
@@ -219,11 +123,12 @@ func (m *model) Init() tea.Cmd {
 	})
 	m.prevSelectedTab = nofocus
 	m.selectedTab = nofocus
+	m.styling = panels.NewStyles()
 	slog.Info("TUI initializing")
 	return m.refreshIBState()
 }
 
-// Catch keypresses and screen updates here, then pass to View().
+// Update catches keypresses and screen updates then passes them to View().
 func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) { //nolint:ireturn
 	var err error
 	switch v := msg.(type) {
@@ -331,24 +236,124 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) { //nolint:ireturn
 	return m, nil
 }
 
-// Based on the TUI model state, render the data to screen.
+// View gathers the TUI model state and renders the data to screen.
 func (m *model) View() string {
 	top := panels.RenderHorizontalGroup(
 		m.panels[portfolio:quote],
+		m.styling,
 		m.selectedTab,
 		m.screenWidth,
 	)
 	mid := panels.RenderHorizontalGroup(
 		m.panels[quote:logs],
+		m.styling,
 		m.selectedTab,
 		m.screenWidth,
 	)
 	bot := panels.RenderHorizontalGroup(
 		m.panels[logs:],
+		m.styling,
 		m.selectedTab,
 		m.screenWidth,
 	)
-	status := panels.RenderStatusLine("STATUS LINE")
+	status := panels.RenderStatusLine("STATUS LINE", m.styling)
 
 	return lipgloss.JoinVertical(lipgloss.Left, top, mid, bot, status)
+}
+
+// Render the Portfolio panel into a string for further Bubbletea rendering.
+func (m *model) renderPorfolioContent() string {
+	return fmt.Sprintf(
+		"%s (%v)",
+		m.ibs.CurrentTime.Format(time.StampMilli),
+		m.ibs.CurrentTime.Location(),
+	)
+}
+
+// Render the Watchlist panel into a string for further Bubbletea rendering.
+func (m *model) renderWatchlistContent() string {
+	return "renderWatchlistTab"
+}
+
+// Render the Order Entry panel into a string for further Bubbletea rendering.
+func (m *model) renderOrderEntryContent() string {
+	return "renderOrderEntryTab"
+}
+
+// Render the Open Orders panel into a string for further Bubbletea rendering.
+func (m *model) renderOpenOrdersContent() string {
+	return "renderOpenOrdersTab"
+}
+
+// Render the Algo panel into a string for further Bubbletea rendering.
+func (m *model) renderAlgoContent() string {
+	return "renderAlgoTab"
+}
+
+// Render the Log panel into a string for further Bubbletea rendering.
+func (m *model) renderLogContent() string {
+	var err error
+	m.logFollow, err = panels.CursorAtEOF(m.logFile, m.logCursor)
+	if err != nil {
+		slog.Error("Couldn't determine if cursor at end of file", "error", err)
+	}
+	offset := m.logCursor
+	if m.logFollow {
+		fileInfo, err := m.logFile.Stat()
+		if err != nil {
+			slog.Warn("Couldn't stat log file during log tab render")
+		} else {
+			offset = fileInfo.Size()
+		}
+	}
+	m.logLines, err = panels.RenderLog(m.logFile, offset, m.logHeight, m.screenWidth)
+	if err != nil {
+		slog.Error("Couldn't render log display", "error", err)
+	}
+	str := strings.Join(m.logLines, "\n")
+	str = strings.TrimRight(str, "\r\n")
+
+	return str
+}
+
+// Render the completed Trades panel into a string.
+func (m *model) renderTradeLogContent() string {
+	return "renderTradeLogTab"
+}
+
+// Catchall function to gather IB account state, update
+// TUI model fields, and then set itself to repeat.
+func (m *model) refreshIBState() tea.Cmd {
+	// Portfolio tab:
+	err := m.ibs.ReqCurrentTimeMilli(m.ib)
+	if err != nil {
+		slog.Error("Couldn't get time from IB API", "error", err)
+	}
+
+	// Log tab:
+	if m.logFollow {
+		m.logCursor, err = panels.GetFileSize(m.logFile)
+		if err != nil {
+			slog.Error("m.logCursor couldn't retrieve file size", "error", err)
+		}
+		m.panels[logs].Tab = "6. Log "
+	} else {
+		m.panels[logs].Tab = "6. Log*"
+	}
+
+	// Render All tabs:
+	m.panels[portfolio].Content = m.renderPorfolioContent()
+	m.panels[watchlist].Content = m.renderWatchlistContent()
+	m.panels[quote].Content = m.renderOrderEntryContent()
+	m.panels[orders].Content = m.renderOpenOrdersContent()
+	m.panels[algos].Content = m.renderAlgoContent()
+	m.panels[logs].Content = m.renderLogContent()
+	m.panels[trades].Content = m.renderTradeLogContent()
+
+	// Re-run timer:
+	return tea.Batch(
+		tea.Tick(millisecondRefreshRate*time.Millisecond, func(t time.Time) tea.Msg {
+			return refreshMsg(t)
+		}),
+	)
 }

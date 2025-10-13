@@ -1,4 +1,4 @@
-// Package panels contains styling components to render strings for a TUI.
+// Package panels contains styling components to render strings for the TUI.
 package panels
 
 import (
@@ -7,106 +7,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-const (
-	colorSelected = lipgloss.Color("#7D56f4") // Purple
-	colorDimmed   = lipgloss.Color("#666666") // Dark gray
-	bordersWidth  = 2
-)
-
-var (
-	baseContentStyle = lipgloss.NewStyle().
-				Border(lipgloss.Border{
-			Top:         " ",
-			Bottom:      "─",
-			Left:        "│",
-			Right:       "│",
-			TopLeft:     "│",
-			TopRight:    "│",
-			BottomLeft:  "└",
-			BottomRight: "┘",
-		}, true)
-		// Height(10).
-		// MaxHeight(12)
-
-	activeContentStyle = lipgloss.NewStyle().
-				Inherit(baseContentStyle).
-				Padding(0, 1).
-				BorderForeground(colorSelected)
-
-	inactiveContentStyle = lipgloss.NewStyle().
-				Inherit(baseContentStyle).
-				Padding(0, 1).
-				BorderForeground(colorDimmed)
-
-	activeTabStyle = lipgloss.NewStyle().
-			BorderForeground(colorSelected)
-
-	inactiveTabStyle = lipgloss.NewStyle().
-				BorderForeground(colorDimmed)
-
-	tabOpenStyle = lipgloss.NewStyle().
-			Padding(0, 1).
-			Border(lipgloss.Border{
-			Top:         "─",
-			Bottom:      " ",
-			Left:        "│",
-			Right:       "│",
-			TopLeft:     "╭",
-			TopRight:    "╮",
-			BottomLeft:  "┘",
-			BottomRight: "└",
-		}, true)
-
-	tabHiddenStyle = lipgloss.NewStyle().
-			Padding(0, 1).
-			Border(lipgloss.Border{
-			Top:         "─",
-			Bottom:      "─",
-			Left:        "│",
-			Right:       "│",
-			TopLeft:     "╭",
-			TopRight:    "╮",
-			BottomLeft:  "─",
-			BottomRight: "─",
-		})
-
-	tabFirstOpenStyle = lipgloss.NewStyle().
-				Padding(0, 1).
-				Border(lipgloss.Border{
-			Top:         "─",
-			Bottom:      " ",
-			Left:        "│",
-			Right:       "│",
-			TopLeft:     "╭",
-			TopRight:    "╮",
-			BottomLeft:  "│",
-			BottomRight: "└",
-		})
-
-	tabFirstHiddenStyle = lipgloss.NewStyle().
-				Padding(0, 1).
-				Border(lipgloss.Border{
-			Top:         "─",
-			Bottom:      "─",
-			Left:        "│",
-			Right:       "│",
-			TopLeft:     "╭",
-			TopRight:    "╮",
-			BottomLeft:  "╭",
-			BottomRight: "─",
-		})
-
-	trailingTabStyle = lipgloss.NewStyle().
-				Border(lipgloss.Border{
-			Bottom:      "─",
-			BottomLeft:  "─",
-			BottomRight: "╮",
-		}, false, true, true)
-
-	statusStyle = lipgloss.NewStyle().Bold(true)
-)
-
-// Panel represents a a horizontal grouping of tabs.
+// Panel represents a horizontal grouping of tabs.
 type Panel struct {
 	Index    int
 	Tab      string
@@ -115,69 +16,67 @@ type Panel struct {
 }
 
 // RenderHorizontalGroup styles a panel grouping into horizontal tabs.
-func RenderHorizontalGroup(panels []*Panel, selectedTab, width int) string {
+func RenderHorizontalGroup(panels []*Panel, styles *Styles, selectedTab, width int) string {
 	var content string
 	var focused bool
 	var style lipgloss.Style
-	styles := make([]lipgloss.Style, 0)
+	tabStyles := make([]lipgloss.Style, 0)
 	tabs := make([]string, 0)
 	tabRow := make([]string, 0)
 	tabsLength := 0
 
 	for i, p := range panels {
 		// Check if the tab is the first tab and whether it' open
-		if i == 0 {
-			if p.Revealed {
-				style = tabFirstOpenStyle
-			} else {
-				style = tabFirstHiddenStyle
-			}
-		} else {
-			if p.Revealed {
-				style = tabOpenStyle
-			} else {
-				style = tabHiddenStyle
-			}
+		switch {
+		case i == 0 && p.Revealed:
+			style = styles.firstTabOpen
+		case i == 0 && !p.Revealed:
+			style = styles.firstTabHidden
+		case p.Revealed:
+			style = styles.tabOpen
+		default:
+			style = styles.tabHidden
 		}
+
 		// Add coloring to tab based on focus
 		if selectedTab == p.Index {
 			focused = true
-			style = style.Inherit(activeTabStyle)
+			style = style.Inherit(styles.activeTab)
 			// Restyle previous tabs accordingly, if necessary
 			if i > 0 {
 				for j := i; j > 0; j-- {
-					styles[j-1] = styles[j-1].BorderBottomForeground(colorSelected)
+					tabStyles[j-1] = tabStyles[j-1].BorderBottomForeground(colorSelected)
 				}
 			}
 		} else {
-			style = style.Inherit(inactiveTabStyle)
+			style = style.Inherit(styles.inactiveTab)
 			if focused {
 				style = style.BorderBottomForeground(colorSelected)
 			}
 		}
 		tabs = append(tabs, p.Tab)
-		styles = append(styles, style)
+		tabStyles = append(tabStyles, style)
 
 		// Content styling
 		if p.Revealed {
 			if selectedTab == p.Index {
-				content = activeContentStyle.Width(width - bordersWidth).Render(p.Content)
+				content = styles.activeContent.Width(width - bordersWidth).Render(p.Content)
 			} else {
-				content = inactiveContentStyle.Width(width - bordersWidth).Render(p.Content)
+				content = styles.inactiveContent.Width(width - bordersWidth).Render(p.Content)
 			}
 		}
 	}
 
 	for i, t := range tabs {
-		tabRow = append(tabRow, styles[i].Render(t))
+		tabRow = append(tabRow, tabStyles[i].Render(t))
 		tabsLength += lipgloss.Width(tabRow[i])
 	}
 
 	// Final trailing tab
 	if focused {
-		style = trailingTabStyle.Inherit(activeTabStyle)
+		style = styles.trailingTab.Inherit(styles.activeTab)
 	} else {
-		style = trailingTabStyle.Inherit(inactiveTabStyle)
+		style = styles.trailingTab.Inherit(styles.inactiveTab)
 	}
 	tabRow = append(tabRow,
 		style.Render(strings.Repeat(" ", width-tabsLength-bordersWidth)),
@@ -189,6 +88,6 @@ func RenderHorizontalGroup(panels []*Panel, selectedTab, width int) string {
 
 // RenderStatusLine styles the bottom status line of the TUI.
 // :TODO Dynamically show allowed keypresses depending on context.
-func RenderStatusLine(status string) string {
-	return statusStyle.Render(status)
+func RenderStatusLine(status string, styles *Styles) string {
+	return styles.statusLine.Render(status)
 }
