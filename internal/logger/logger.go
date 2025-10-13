@@ -44,7 +44,7 @@ func (h *SMTPHandler) Handle(_ context.Context, r slog.Record) error {
 	)
 	err := h.smtp.Send("Log Alert", msg, h.smtp.Recipient)
 	if err != nil {
-		return fmt.Errorf("logger couldn't send email: %w", err)
+		return fmt.Errorf("logger couldn't send emailr: %w", err)
 	}
 	return nil
 }

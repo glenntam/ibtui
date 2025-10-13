@@ -9,7 +9,7 @@ import (
 	"github.com/joho/godotenv"
 )
 
-// Config contains parsed .env variables specific to the app
+// Config contains parsed .env variables specific to the app.
 type Config struct {
 	Host          string
 	Port          int
@@ -31,10 +31,8 @@ type Config struct {
 func ParseDotEnv() *Config {
 	err := godotenv.Load()
 	if err != nil {
-		fmt.Println(
-			".env file not found! Please create one. \n\n A sample template file called .env-example is included for your reference",
-		)
-		os.Exit(1)
+		fmt.Printf(".env file not found! Please create one.\n" +
+			"A sample template file called .env-example is included for your reference.")
 	}
 
 	host := os.Getenv("IBTUI_HOST")

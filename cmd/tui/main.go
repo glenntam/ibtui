@@ -7,12 +7,13 @@ import (
 	"os"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
 	"github.com/glenntam/ibtui/internal/env"
 	"github.com/glenntam/ibtui/internal/logger"
 	"github.com/glenntam/ibtui/internal/smtp"
 	"github.com/glenntam/ibtui/internal/state"
 	"github.com/glenntam/ibtui/internal/zerobridge"
+
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/scmhub/ibsync"

@@ -4,10 +4,14 @@ package zerobridge
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
 )
+
+// ErrNilSlogger occurs when nil is assigned to something where *log/slog.Logger is expected.
+var ErrNilSlogger = errors.New("nil passed to Slogger field in ZerologToSlogBridge struct")
 
 // ZerologToSlogBridge contains a log/slog logger.
 type ZerologToSlogBridge struct {
@@ -16,6 +20,10 @@ type ZerologToSlogBridge struct {
 
 // Write overloads zerlolog's original Write to conform to log/slog format.
 func (b *ZerologToSlogBridge) Write(p []byte) (int, error) {
+	// nil guard
+	if b.Slogger == nil {
+		return len(p), ErrNilSlogger
+	}
 	// Parse the zerolog JSON output
 	var logEntry map[string]interface{}
 	err := json.Unmarshal(p, &logEntry)
