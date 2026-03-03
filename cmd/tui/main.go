@@ -1,4 +1,3 @@
-// The main entry point of ibtui and starting the TUI.
 package main
 
 import (
@@ -44,10 +43,7 @@ func main() {
 		cfg.SMTPSender,
 		cfg.SMTPRecipient)
 
-	logFile, err := os.OpenFile(cfg.LogFile,
-		os.O_CREATE|os.O_RDWR|os.O_APPEND,
-		logFilePermission,
-	)
+	logFile, err := os.OpenFile(cfg.LogFile, os.O_CREATE|os.O_RDWR|os.O_APPEND, logFilePermission)
 	if err != nil {
 		fmt.Printf("OS Error: Unable to open nor create %v\n", cfg.LogFile)
 		os.Exit(1)
@@ -65,6 +61,11 @@ func main() {
 
 	// Set up TUI model:
 	ibs := state.NewIBState()
+	ibs.Contracts = append(ibs.Contracts,
+		ibsync.NewFuture("MNQ", "202603", "CME", "2", "USD"),
+		ibsync.NewFuture("MES", "202603", "CME", "5", "USD"),
+	)
+
 	tui := &model{
 		ib:        ib,
 		ibs:       ibs,
@@ -74,18 +75,18 @@ func main() {
 		logFollow: true,
 	}
 
-	// Connect to IB API and start TUI:
+	// Connect to IB API:
 	ibCfg := ibsync.NewConfig(
 		ibsync.WithHost(cfg.Host),
 		ibsync.WithPort(cfg.Port),
 		ibsync.WithClientID(cfg.ClientID),
 	)
-
 	if err = ib.Connect(ibCfg); err != nil {
 		slog.Error("Couldn't connect to IB", "error", err)
 	}
 	defer disconnect(ib)
 
+	// Start TUI:
 	p := tea.NewProgram(tui, tea.WithAltScreen())
 	if _, err := p.Run(); err != nil {
 		slog.Error("Couldn't run bubbletea", "error", err)

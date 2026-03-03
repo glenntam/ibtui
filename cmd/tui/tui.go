@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -17,10 +18,9 @@ import (
 )
 
 const (
-	millisecondRefreshRate = 30
-
-	minTermWidth  = 48
-	minTermHeight = 22
+	millisecondRefreshRate = 500
+	minTermWidth           = 48
+	minTermHeight          = 22
 )
 
 const (
@@ -40,9 +40,11 @@ type refreshMsg time.Time
 // model reflects the current state of the TUI app.
 // model.ibs reflects the state of the IB account via continued polling.
 type model struct {
-	ib       *ibsync.IB
-	ibs      *state.IBState
-	timezone string
+	ib               *ibsync.IB
+	ibs              *state.IBState
+	timezone         string
+	contracts        []*ibsync.Contract
+	selectedContract *ibsync.Contract
 
 	logFile   *os.File
 	logHeight int
@@ -50,6 +52,7 @@ type model struct {
 	logCursor int64
 	logFollow bool
 
+	colors			map[string]lipgloss.Style
 	panels          []*panels.Panel
 	styling         *panels.Styles
 	prevSelectedTab int
@@ -66,6 +69,18 @@ func (m *model) Init() tea.Cmd {
 		slog.Error("m.logCursor couldn't retrieve log file size", "error", err)
 	}
 
+	// Init contracts
+	slog.Debug("qualifying contracts...")
+	err = m.ib.QualifyContract(m.ibs.Contracts...)
+	if err != nil {
+		slog.Error("couldn't qualify contracts", "error", err)
+	}
+	slog.Debug("getting tickers for contracts...")
+	for _, c := range m.ibs.Contracts {
+		m.ibs.Tickers = append(m.ibs.Tickers, m.ib.ReqMktData(c, ""))
+		//time.Sleep(1 * time.Second)
+	}
+
 	// Use x/term to temporarily get init screen width/height before passing to TUI:
 	termWidth, termHeight, err := term.GetSize(int(os.Stdout.Fd()))
 	if err != nil {
@@ -75,6 +90,17 @@ func (m *model) Init() tea.Cmd {
 	m.screenWidth = termWidth
 	m.screenHeight = termHeight
 
+	// Initialize colors:
+	m.colors = make(map[string]lipgloss.Style)
+	m.colors["redFG"] = lipgloss.NewStyle().Foreground(lipgloss.Color("52"))
+	m.colors["redBG"] = lipgloss.NewStyle().Background(lipgloss.Color("52"))
+	m.colors["greenFG"] = lipgloss.NewStyle().Foreground(lipgloss.Color("22"))
+	m.colors["greenBG"] = lipgloss.NewStyle().Background(lipgloss.Color("22"))
+	m.colors["yellowFG"] = lipgloss.NewStyle().Foreground(lipgloss.Color("3"))
+	m.colors["yellowBG"] = lipgloss.NewStyle().Background(lipgloss.Color("3"))
+	m.colors["blueFG"] = lipgloss.NewStyle().Foreground(lipgloss.Color("4"))
+	m.colors["blueBG"] = lipgloss.NewStyle().Background(lipgloss.Color("4"))
+
 	// Initialize panels:
 	m.panels = append(m.panels, &panels.Panel{
 		Index: nofocus,
@@ -83,13 +109,13 @@ func (m *model) Init() tea.Cmd {
 		Index:    portfolio,
 		Tab:      "1. Porfolio",
 		Content:  m.renderPorfolioContent(),
-		Revealed: true,
+		Revealed: false,
 	})
 	m.panels = append(m.panels, &panels.Panel{
 		Index:    watchlist,
 		Tab:      "2. Watchlist",
 		Content:  m.renderWatchlistContent(),
-		Revealed: false,
+		Revealed: true,
 	})
 	m.panels = append(m.panels, &panels.Panel{
 		Index:    quote,
@@ -124,7 +150,11 @@ func (m *model) Init() tea.Cmd {
 	m.prevSelectedTab = nofocus
 	m.selectedTab = nofocus
 	m.styling = panels.NewStyles()
-	slog.Info("TUI initializing")
+	//slog.Info("TUI initializing")
+	time.Sleep(1 * time.Second)
+	m.ibs.GetBars(m.ib)
+
+
 	return m.refreshIBState()
 }
 
@@ -135,6 +165,14 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) { //nolint:ireturn
 	case tea.KeyMsg:
 		switch v.String() {
 		case "ctrl+c", "q":
+			// Gracefully quit
+			for _, c := range m.ibs.Contracts {
+				m.ib.CancelMktData(c)
+			}
+			if m.ibs.Chart.Cancel != nil {
+				m.ibs.Chart.Cancel()
+			}
+			time.Sleep(1 * time.Second)
 			return m, tea.Quit
 		case strconv.Itoa(portfolio):
 			if m.selectedTab == portfolio {
@@ -265,19 +303,45 @@ func (m *model) View() string {
 func (m *model) renderPorfolioContent() string {
 	return fmt.Sprintf(
 		"%s (%v)",
-		m.ibs.CurrentTime.Format(time.StampMilli),
-		m.ibs.CurrentTime.Location(),
+		m.ibs.CurrentTime.Format(time.StampMilli), m.ibs.CurrentTime.Location(),
 	)
 }
 
 // Render the Watchlist panel into a string for further Bubbletea rendering.
 func (m *model) renderWatchlistContent() string {
-	return "renderWatchlistTab"
+	content := ""
+	if len(m.ibs.Tickers) > 0 {
+		for _, t := range m.ibs.Tickers {
+			styledPrice := ""
+
+			if t.PrevLast() < t.Last() {
+				styledPrice = m.colors["greenBG"].Render(strconv.FormatFloat(t.Last(), 'f', 2, 64))
+			} else if t.PrevLast() > t.Last() {
+				styledPrice = m.colors["redBG"].Render(strconv.FormatFloat(t.Last(), 'f', 2, 64))
+			} else {
+				styledPrice = strconv.FormatFloat(t.Last(), 'f', -1, 64)
+			}
+
+			content += t.Contract().LocalSymbol + " " + styledPrice + "  "
+			if utf8.RuneCountInString(content) + 15 > m.screenWidth {
+				content += "\n"
+			}
+		}
+	}
+	return content
 }
 
 // Render the Order Entry panel into a string for further Bubbletea rendering.
 func (m *model) renderOrderEntryContent() string {
-	return "renderOrderEntryTab"
+	content := "renderOrderEntryTab"
+	if m.ibs.Chart != nil {
+		content = ""
+		for _, b := range m.ibs.Chart.Bars {
+			content += fmt.Sprintf("%v %.2f, Vol: %v, BarCount: %v\n", b.Date, b.Close, b.Volume, b.BarCount)
+		}
+		slog.Debug(strconv.Itoa(len(m.ibs.Chart.Bars)))
+	}
+	return content
 }
 
 // Render the Open Orders panel into a string for further Bubbletea rendering.
@@ -330,6 +394,7 @@ func (m *model) refreshIBState() tea.Cmd {
 		slog.Error("Couldn't get time from IB API", "error", err)
 	}
 
+	m.ibs.GetBars(m.ib)
 	// Log tab:
 	if m.logFollow {
 		m.logCursor, err = panels.GetFileSize(m.logFile)

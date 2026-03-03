@@ -43,7 +43,7 @@ func ParseDotEnv() *Config {
 	portStr := os.Getenv("IBTUI_PORT")
 	port, err := strconv.Atoi(portStr)
 	if err != nil {
-		port = 4001
+		port = 7496
 	}
 
 	clientIDStr := os.Getenv("IBTUI_CLIENT_ID")
