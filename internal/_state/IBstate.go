@@ -83,7 +83,7 @@ func (s *IBState) GetBars(ib *ibsync.IB) {
 	s.Chart.Cancel = cancel
 	go func() {
 		for bar := range barChan {
-			if len(s.Chart.Bars) == 0 {
+			if len(s.Chart.Bars) == nil {
 				s.Chart.Bars = append(s.Chart.Bars, bar)
 			else
 

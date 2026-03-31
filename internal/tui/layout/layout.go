@@ -1,5 +1,5 @@
-// Package panels contains styling components to render strings for the TUI.
-package panels
+// Package layout contains styling components to render tabs and borders for the TUI.
+package layout
 
 import (
 	"strings"
@@ -7,7 +7,11 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-// Panel represents a horizontal grouping of tabs.
+const (
+	bordersWidth = 2
+)
+
+// Panel represents a tabbed section.
 type Panel struct {
 	Index    int
 	Tab      string
@@ -26,22 +30,22 @@ func RenderHorizontalGroup(panels []*Panel, styles *Styles, selectedTab, width i
 	tabsLength := 0
 
 	for i, p := range panels {
-		// Check if the tab is the first tab and whether it' open
+		// Check if the tab is the first tab and whether it's open
 		switch {
 		case i == 0 && p.Revealed:
-			style = styles.firstTabOpen
+			style = styles.FirstTabOpen
 		case i == 0 && !p.Revealed:
-			style = styles.firstTabHidden
+			style = styles.FirstTabHidden
 		case p.Revealed:
-			style = styles.tabOpen
+			style = styles.TabOpen
 		default:
-			style = styles.tabHidden
+			style = styles.TabHidden
 		}
 
 		// Add coloring to tab based on focus
 		if selectedTab == p.Index {
 			focused = true
-			style = style.Inherit(styles.activeTab)
+			style = style.Inherit(styles.ActiveTab)
 			// Restyle previous tabs accordingly, if necessary
 			if i > 0 {
 				for j := i; j > 0; j-- {
@@ -49,7 +53,7 @@ func RenderHorizontalGroup(panels []*Panel, styles *Styles, selectedTab, width i
 				}
 			}
 		} else {
-			style = style.Inherit(styles.inactiveTab)
+			style = style.Inherit(styles.InactiveTab)
 			if focused {
 				style = style.BorderBottomForeground(colorSelected)
 			}
@@ -60,9 +64,9 @@ func RenderHorizontalGroup(panels []*Panel, styles *Styles, selectedTab, width i
 		// Content styling
 		if p.Revealed {
 			if selectedTab == p.Index {
-				content = styles.activeContent.Width(width - bordersWidth).Render(p.Content)
+				content = styles.ActiveContent.Width(width - bordersWidth).Render(p.Content)
 			} else {
-				content = styles.inactiveContent.Width(width - bordersWidth).Render(p.Content)
+				content = styles.InactiveContent.Width(width - bordersWidth).Render(p.Content)
 			}
 		}
 	}
@@ -74,9 +78,9 @@ func RenderHorizontalGroup(panels []*Panel, styles *Styles, selectedTab, width i
 
 	// Final trailing tab
 	if focused {
-		style = styles.trailingTab.Inherit(styles.activeTab)
+		style = styles.TrailingTab.Inherit(styles.ActiveTab)
 	} else {
-		style = styles.trailingTab.Inherit(styles.inactiveTab)
+		style = styles.TrailingTab.Inherit(styles.InactiveTab)
 	}
 	tabRow = append(tabRow,
 		style.Render(strings.Repeat(" ", width-tabsLength-bordersWidth)),
@@ -84,10 +88,4 @@ func RenderHorizontalGroup(panels []*Panel, styles *Styles, selectedTab, width i
 
 	tabBar := lipgloss.JoinHorizontal(lipgloss.Bottom, tabRow...)
 	return lipgloss.JoinVertical(lipgloss.Left, tabBar, content)
-}
-
-// RenderStatusLine styles the bottom status line of the TUI.
-// :TODO Dynamically show allowed keypresses depending on context.
-func RenderStatusLine(status string, styles *Styles) string {
-	return styles.statusLine.Render(status)
 }
