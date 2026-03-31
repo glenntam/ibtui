@@ -1,11 +1,11 @@
-package panels
+// Package typewriter tracks cursor movement in a file. Used for scrolling display of a log file.
+package typewriter
 
 import (
 	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
-	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -14,8 +14,10 @@ import (
 // ErrNegativePosition occurs when a file operation is given a negative position.
 var ErrNegativePosition = errors.New("file position can't be negative")
 
-// PrevNewline scans backwards from byte location "pos" and returns the byte
-// location of the previous occurrence of "\n".  Return itself if there are none.
+// PrevNewline scans backwards from byte location "pos" and returns
+// the byte location of the previous occurrence of "\n".
+//
+// Returns itself if there are no previous occurrences of "\n".
 func PrevNewline(f *os.File, pos int64) (int64, error) {
 	if pos <= 0 {
 		return pos, ErrNegativePosition
@@ -42,8 +44,8 @@ func PrevNewline(f *os.File, pos int64) (int64, error) {
 	return pos, nil
 }
 
-// NextNewline scans forwards from byte location "pos" and returns the byte
-// location of the next occurrence of "\n".  Return itself if there are none.
+// NextNewline scans forwards from byte location "pos" and returns the byte location of the next occurrence of "\n".
+// Return itself if there are no subsequent occurrences of "\n".
 func NextNewline(f *os.File, pos int64) (int64, error) {
 	if pos <= 0 {
 		return pos, ErrNegativePosition
@@ -108,35 +110,38 @@ func getLine(f *os.File, pos int64) (string, error) {
 	return string(line), nil
 }
 
-// RenderLog returns a slice of strings of a file based
-// on a given end position and number of lines desired.
+// RenderLog returns a slice of strings of a file based on a given end position and number of lines desired.
 func RenderLog(f *os.File, pos int64, n, w int) ([]string, error) {
-	result := make([]string, 0)
-	for range n {
+	result := make([]string, n)
+	for i := n - 1; i >= 0; i-- {
 		l, err := getLine(f, pos)
 		if err != nil {
-			return nil, fmt.Errorf("couldn't render log slice because couldn't get line number: %w", err)
+			result[i] = "-"
+			continue
 		}
 		lineObj := make(map[string]any)
-		err = json.Unmarshal([]byte(l), &lineObj) // Parse the individual log entry
-		if err != nil {
-			return nil, fmt.Errorf("couldn't render log slice because couldn't unmarshal JSON line object: %w", err)
-		}
+		_ = json.Unmarshal([]byte(l), &lineObj) // Parse the individual log entry
 		// Separately handle "level"
 		level, ok := lineObj["level"].(string)
 		if !ok {
-			return nil, fmt.Errorf("log entry in log file (line #%v) didn't have a log level: %w", l, err)
+			result[i] = "-"
+			continue
 		}
 		delete(lineObj, "level")
 		// Separately handle "time"
 		timestamp, ok := lineObj["time"].(string)
 		if !ok {
-			return nil, fmt.Errorf("log entry in log file (line #%v) didn't have a timestamp: %w", l, err)
+			result[i] = "-"
+			continue
 		}
 		delete(lineObj, "time")
 		t, err := time.Parse(time.RFC3339Nano, timestamp)
 		if err != nil {
-			t, _ = time.Parse(time.RFC3339, timestamp)
+			t, err = time.Parse(time.RFC3339, timestamp)
+			if err != nil {
+				result[i] = "-"
+				continue
+			}
 		}
 		timeStr := t.Format("Jan 02, 15:04")
 		// Separately handle "msg", if it exists
@@ -154,7 +159,7 @@ func RenderLog(f *os.File, pos int64, n, w int) ([]string, error) {
 		for _, key := range keys {
 			objs = append(objs, fmt.Sprintf("%s=%v", key, lineObj[key]))
 		}
-		logDisplayStr := fmt.Sprintf(
+		result[i] = fmt.Sprintf(
 			"%s [%s] %s. %s",
 			level,
 			timeStr,
@@ -162,23 +167,17 @@ func RenderLog(f *os.File, pos int64, n, w int) ([]string, error) {
 			strings.Join(objs, ", "),
 		)
 		// Compile whole log entry string
-		result = append(result, logDisplayStr)
 		pos, err = PrevNewline(f, pos) // Started at the bottom; move up to the previous line
 		if err != nil {
-			return nil, fmt.Errorf("couldn't render log slice because couldn't get previous newline: %w", err)
+			break
 		}
 	}
-	slices.Reverse(result) // Strings are appended in reverse order. Reverse them.
-	// Handle word wraps based on screen size
-	var wrapped []string
-	for _, s := range result {
-		for len(s) > w {
-			wrapped = append(wrapped, s[:w])
-			s = s[w:]
-		}
-		if len(s) > 0 {
-			wrapped = append(wrapped, s)
+	// Truncate the strings to the screen width
+	for i := range result {
+		r := []rune(result[i])
+		if len(r) > w {
+			result[i] = string(r[:w])
 		}
 	}
-	return wrapped[len(wrapped)-n:], nil
+	return result, nil
 }
