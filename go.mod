@@ -1,14 +1,37 @@
 module github.com/glenntam/ibtui
 
+<<<<<<< Updated upstream
 go 1.25.5
+=======
+<<<<<<< Updated upstream
+go 1.25
+=======
+go 1.26
+>>>>>>> Stashed changes
+>>>>>>> Stashed changes
 
 require (
 	github.com/charmbracelet/bubbletea v1.3.10
 	github.com/charmbracelet/lipgloss v1.1.0
+<<<<<<< Updated upstream
 	github.com/glenntam/multislog v0.1.5
 	github.com/rs/zerolog v1.35.0
 	github.com/scmhub/ibsync v0.10.44
 	golang.org/x/term v0.41.0
+=======
+<<<<<<< Updated upstream
+	github.com/joho/godotenv v1.5.1
+	github.com/rs/zerolog v1.34.0
+	github.com/scmhub/ibsync v0.10.44
+	golang.org/x/term v0.40.0
+=======
+	github.com/glenntam/multislog v0.1.5
+	github.com/robaho/fixed v0.0.0-20251201003256-beee5759f86a
+	github.com/rs/zerolog v1.35.0
+	github.com/scmhub/ibsync v0.10.45
+	golang.org/x/term v0.41.0
+>>>>>>> Stashed changes
+>>>>>>> Stashed changes
 )
 
 require (
@@ -29,8 +52,7 @@ require (
 	github.com/muesli/cancelreader v0.2.2 // indirect
 	github.com/muesli/termenv v0.16.0 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
-	github.com/robaho/fixed v0.0.0-20251201003256-beee5759f86a // indirect
-	github.com/scmhub/ibapi v0.10.44 // indirect
+	github.com/scmhub/ibapi v0.10.45 // indirect
 	github.com/xo/terminfo v0.0.0-20220910002029-abceb7e1c41e // indirect
 	golang.org/x/sys v0.42.0 // indirect
 	golang.org/x/text v0.35.0 // indirect

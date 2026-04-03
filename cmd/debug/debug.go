@@ -1,9 +1,26 @@
+<<<<<<< Updated upstream
 // Package debug is used for throwaway code to test ibsync behavior
 package debug
 
 import (
 	"fmt"
+=======
+<<<<<<< Updated upstream
+// The main entry point of ibtui and starting the TUI.
+=======
+// Package debug is used for throwaway code to test ibsync behavior
+>>>>>>> Stashed changes
+package main
+
+import (
+	"fmt"
+<<<<<<< Updated upstream
+	//"os"
+>>>>>>> Stashed changes
 	"time"
+=======
+	// "time"
+>>>>>>> Stashed changes
 
 	"github.com/scmhub/ibsync"
 )
@@ -37,8 +54,18 @@ func main() {
 	defer ib.Disconnect()
 
 	//
+<<<<<<< Updated upstream
 	fut := ibsync.NewFuture("MNQ", "202603", "CME", "2", "USD")
 	err = ib.QualifyContract(fut)
+=======
+<<<<<<< Updated upstream
+	eurusd := ibsync.NewFuture("MNQ", "202603", "CME", "2", "USD")
+	err = ib.QualifyContract(eurusd)
+=======
+	fut := ibsync.NewFuture("MNQ", "202606", "CME", "2", "USD")
+	err = ib.QualifyContract(fut)
+>>>>>>> Stashed changes
+>>>>>>> Stashed changes
 	if err != nil {
 		panic(err)
 	}
@@ -64,7 +91,12 @@ func main() {
 	// Historical Data with realtime Updates
 	duration = "1 D"
 	barSize = "1 hour"
+<<<<<<< Updated upstream
 	barChan, cancel := ib.ReqHistoricalDataUpToDate(fut, duration, barSize, whatToShow, useRTH, formatDate)
+=======
+<<<<<<< Updated upstream
+	barChan, cancel := ib.ReqHistoricalDataUpToDate(eurusd, duration, barSize, whatToShow, useRTH, formatDate)
+>>>>>>> Stashed changes
 
 	go func() {
 		for bar := range barChan {
@@ -72,9 +104,29 @@ func main() {
 			bars = append(bars, bar)
 		}
 	}()
+=======
+	barChan, _ := ib.ReqHistoricalData(fut, "", duration, barSize, whatToShow, useRTH, formatDate)
 
-	time.Sleep(10 * time.Second)
-	cancel()
+	for bar := range barChan {
+		fmt.Println(bar)
+		bars = append(bars, bar)
+	}
+>>>>>>> Stashed changes
+
+	fmt.Println("Number of bars:", len(bars))
+	fmt.Println("First Bar", bars[0])
+	fmt.Println("Last Bar", bars[len(bars)-1])
+
+
+	// go func() {
+	//     for bar := range barChan {
+	//         fmt.Println(bar)
+	//         bars = append(bars, bar)
+	//     }
+	// }()
+
+	// time.Sleep(10 * time.Second)
+	// cancel()
 
 	// Historical schedule
 	// historicalSchedule, err := ib.ReqHistoricalSchedule(eurusd, endDateTime, duration, useRTH)
