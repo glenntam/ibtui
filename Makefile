@@ -16,18 +16,10 @@ check:
 	go test ./...
 	@printf "Press Enter to continue..."; read dummy
 
-<<<<<<< Updated upstream
-run: clean build
-=======
-<<<<<<< Updated upstream
-run: build
-=======
 debug:
 	go run ./cmd/debug/...
 
 run: clean build
->>>>>>> Stashed changes
->>>>>>> Stashed changes
 	./$(APP)
 
 update:

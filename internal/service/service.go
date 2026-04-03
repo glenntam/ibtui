@@ -1,11 +1,8 @@
 // Package service is an abstraction layer in between ibsync/ibapi and the TUI.
 // It handles context, so TUI keypresses can be fire-and-forget without any lag.
-<<<<<<< Updated upstream
-=======
 //
 // The TUI can read IBService struct fields directly without worrying about data
 // corruption since ibsync internally already has thread-safe mutex.
->>>>>>> Stashed changes
 package service
 
 import (
@@ -14,40 +11,26 @@ import (
 	// "fmt"
 	"log/slog"
 	"sync"
-<<<<<<< Updated upstream
-	"sync/atomic"
-=======
 	"strconv"
 	// "strings"
 	// "sync/atomic"
->>>>>>> Stashed changes
 	"time"
 
 	"github.com/glenntam/ibtui/internal/zerobridge"
 
 	"github.com/rs/zerolog"
-<<<<<<< Updated upstream
-=======
 	//"github.com/scmhub/ibapi"
 	//"github.com/robaho/fixed"
->>>>>>> Stashed changes
 	"github.com/scmhub/ibsync"
 )
 
 const (
 	connTimeout    = 10 * time.Second
-<<<<<<< Updated upstream
-	sysTimeRefresh = 250 * time.Millisecond
-=======
 	sysTimeRefresh = 100 * time.Millisecond
->>>>>>> Stashed changes
 	oneThousand    = 1_000
 	oneMillion     = 1_000_000
 )
 
-<<<<<<< Updated upstream
-var ErrContractRequired = errors.New("include at least one contract to start ibtui")
-=======
 var (
 	ErrContractRequired = errors.New("include at least one contract to start ibtui")
 	ErrInvalidBarDate = errors.New("couldn't convert ibsync.Bar.Date() to time.Time")
@@ -75,7 +58,6 @@ var barSize = map[string]time.Duration{
 	"1 day":   24 * time.Hour,
 	"1 week":  7 * 24 * time.Hour,
 }
->>>>>>> Stashed changes
 
 // IBService continuously gets the IB account state and makes it suitable for TUI consumption.
 type IBService struct {
@@ -85,15 +67,6 @@ type IBService struct {
 
 	Contracts []*ibsync.Contract
 
-<<<<<<< Updated upstream
-	systemTime       atomic.Pointer[time.Time]
-	cancelSystemTime context.CancelFunc
-
-	tickers       atomic.Pointer[[]*ibsync.Ticker]
-	cancelTickers context.CancelFunc
-
-	bars          atomic.Pointer[[]ibsync.Bar]
-=======
 	SystemTime       *time.Time
 	cancelSystemTime context.CancelFunc
 
@@ -104,7 +77,6 @@ type IBService struct {
 	LastTime      string
 	secondLastBar ibsync.Bar
 	Bars          []ibsync.Bar
->>>>>>> Stashed changes
 	barChan       chan ibsync.Bar
 	cancelReqHist ibsync.CancelFunc
 	cancelBars    context.CancelFunc
@@ -118,28 +90,17 @@ func NewIBService(host string, port, clientID int, contracts []*ibsync.Contract,
 		return nil, ErrContractRequired
 	}
 	// Init values
-<<<<<<< Updated upstream
-	ibs := &IBService{
-		Contracts:        contracts,
-		logger:           logger,
-=======
 	now := time.Now()
 	ibs := &IBService{
 		logger:           logger,
 		Contracts:        contracts,
 		SystemTime:       &now,
 		LastTime:         string(now.Unix()),
->>>>>>> Stashed changes
 		cancelSystemTime: func() {},
 		cancelTickers:    func() {},
 		cancelBars:       func() {},
 		cancelReqHist:    func() {},
 	}
-<<<<<<< Updated upstream
-	placeholder := time.Now()
-	ibs.systemTime.Store(&placeholder)
-=======
->>>>>>> Stashed changes
 	ibs.stopTickers()
 	ibs.stopBars()
 
@@ -177,10 +138,6 @@ func (ibs *IBService) StartIBService() {
 		}
 		ibs.startSystemTime(sysTimeRefresh)
 		ibs.startTickers()
-<<<<<<< Updated upstream
-=======
-		//ibs.StartBars(ibs.Contracts[0])
->>>>>>> Stashed changes
 		ibs.StartBars(ibs.Contracts[0])
 		ibs.ServiceStarted = true
 	}()
@@ -203,14 +160,7 @@ func (ibs *IBService) StopIBService() {
 }
 
 // System Time
-<<<<<<< Updated upstream
-func (ibs *IBService) ReadTime() time.Time {
-	return *ibs.systemTime.Load()
-}
-
-=======
 // startSystemTime starts syncing the Service time to IB
->>>>>>> Stashed changes
 func (ibs *IBService) startSystemTime(interval time.Duration) {
 	var ctx context.Context
 	ctx, ibs.cancelSystemTime = context.WithCancel(context.Background())
@@ -225,27 +175,15 @@ func (ibs *IBService) startSystemTime(interval time.Duration) {
 				i64, _ := ibs.ib.ReqCurrentTimeInMillis()
 				seconds := i64 / oneThousand
 				nanoseconds := (i64 % oneThousand) * oneMillion
-<<<<<<< Updated upstream
-				systemTime := time.Unix(seconds, nanoseconds)
-				ibs.systemTime.Store(&systemTime)
-=======
 				ibTime := time.Unix(seconds, nanoseconds)
 				ibs.SystemTime = &ibTime
->>>>>>> Stashed changes
 			}
 		}
 	}()
 }
 
 // Tickers
-<<<<<<< Updated upstream
-func (ibs *IBService) ReadTickers() []*ibsync.Ticker {
-	return *ibs.tickers.Load()
-}
-
-=======
 // startTickers clears ibs.Tickers slice and inserts ReqMktData for each Contract
->>>>>>> Stashed changes
 func (ibs *IBService) startTickers() {
 	ibs.stopTickers()
 	var ctx context.Context
@@ -253,43 +191,15 @@ func (ibs *IBService) startTickers() {
 	ibs.wg.Add(1)
 	go func() {
 		defer ibs.wg.Done()
-<<<<<<< Updated upstream
-		tickers := make([]*ibsync.Ticker, 0, len(ibs.Contracts))
-		for _, c := range ibs.Contracts {
-			tickers = append(tickers, ibs.ib.ReqMktData(c, ""))
-		}
-		ibs.tickers.Store(&tickers)
-=======
 		for _, c := range ibs.Contracts {
 			ibs.Tickers = append(ibs.Tickers, ibs.ib.ReqMktData(c, ""))
 		}
->>>>>>> Stashed changes
 		// wait for Cancel and then cancel tickers
 		<-ctx.Done()
 		for _, c := range ibs.Contracts {
 			ibs.ib.CancelMktData(c)
 		}
 	}()
-<<<<<<< Updated upstream
-}
-
-func (ibs *IBService) stopTickers() {
-	ibs.cancelTickers()
-	emptyTickers := make([]*ibsync.Ticker, 0)
-	ibs.tickers.Store(&emptyTickers)
-}
-
-// Bars
-func (ibs *IBService) ReadBars() []ibsync.Bar {
-	// return *ibs.bars.Load()
-	tmp := *ibs.bars.Load()
-	tmpBar := make([]ibsync.Bar, 0)
-	if len(tmp) != 0 {
-		tmpBar = append(tmpBar, tmp[0])
-	}
-	return tmpBar
-}
-=======
 	// map the tickers' ContractID for easy reference later.
 	ibs.tickerIdx = make(map[int64]*ibsync.Ticker, len(ibs.Tickers))
 	for _, t := range ibs.Tickers {
@@ -338,7 +248,6 @@ func (ibs *IBService) stopTickers() {
 //     ibs.cancelBars()
 //     ibs.Bars = make([]ibsync.Bar, 0)
 // }
->>>>>>> Stashed changes
 
 func (ibs *IBService) StartBars(contract *ibsync.Contract) {
 	ibs.stopBars()
@@ -349,11 +258,7 @@ func (ibs *IBService) StartBars(contract *ibsync.Contract) {
 		defer ibs.wg.Done()
 		reqHistDone := make(chan struct{})
 		go func() {
-<<<<<<< Updated upstream
-			ibs.barChan, ibs.cancelReqHist = ibs.ib.ReqHistoricalDataUpToDate(contract, "1 D", "1 hour", "TRADES", false, 1)
-=======
 			ibs.barChan, ibs.cancelReqHist = ibs.ib.ReqHistoricalDataUpToDate(contract, "60 S", "10 secs", "TRADES", false, 1)
->>>>>>> Stashed changes
 			close(reqHistDone)
 		}()
 
@@ -371,17 +276,6 @@ func (ibs *IBService) StartBars(contract *ibsync.Contract) {
 					if !ok {
 						continue
 					}
-<<<<<<< Updated upstream
-					currentBars := *ibs.bars.Load()
-					newBars := make([]ibsync.Bar, len(currentBars))
-					if len(currentBars) > 0 && currentBars[len(currentBars)-1].Date == bar.Date {
-						copy(newBars, currentBars)
-						newBars[len(newBars)-1] = bar
-						ibs.bars.Store(&newBars)
-					} else {
-						newBars = append(currentBars, bar)
-						ibs.bars.Store(&newBars)
-=======
 					if len(ibs.Bars) == 0 {
 						ibs.Bars = append(ibs.Bars)
 					} else if ibs.Bars[len(ibs.Bars)-1].Date != bar.Date {
@@ -445,7 +339,6 @@ func (ibs *IBService) StartBars(contract *ibsync.Contract) {
 
 							}
 						}
->>>>>>> Stashed changes
 					}
 				}
 			}
@@ -456,10 +349,5 @@ func (ibs *IBService) StartBars(contract *ibsync.Contract) {
 func (ibs *IBService) stopBars() {
 	ibs.cancelReqHist()
 	ibs.cancelBars()
-<<<<<<< Updated upstream
-	emptyBars := make([]ibsync.Bar, 0)
-	ibs.bars.Store(&emptyBars)
-=======
 	ibs.Bars = make([]ibsync.Bar, 0)
->>>>>>> Stashed changes
 }

@@ -1,37 +1,14 @@
 module github.com/glenntam/ibtui
 
-<<<<<<< Updated upstream
-go 1.25.5
-=======
-<<<<<<< Updated upstream
-go 1.25
-=======
 go 1.26
->>>>>>> Stashed changes
->>>>>>> Stashed changes
 
 require (
 	github.com/charmbracelet/bubbletea v1.3.10
 	github.com/charmbracelet/lipgloss v1.1.0
-<<<<<<< Updated upstream
 	github.com/glenntam/multislog v0.1.5
-	github.com/rs/zerolog v1.35.0
-	github.com/scmhub/ibsync v0.10.44
-	golang.org/x/term v0.41.0
-=======
-<<<<<<< Updated upstream
-	github.com/joho/godotenv v1.5.1
-	github.com/rs/zerolog v1.34.0
-	github.com/scmhub/ibsync v0.10.44
-	golang.org/x/term v0.40.0
-=======
-	github.com/glenntam/multislog v0.1.5
-	github.com/robaho/fixed v0.0.0-20251201003256-beee5759f86a
 	github.com/rs/zerolog v1.35.0
 	github.com/scmhub/ibsync v0.10.45
 	golang.org/x/term v0.41.0
->>>>>>> Stashed changes
->>>>>>> Stashed changes
 )
 
 require (

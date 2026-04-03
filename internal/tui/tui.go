@@ -20,12 +20,7 @@ import (
 )
 
 const (
-<<<<<<< Updated upstream
-	ibSystemTimeRefreshRate = 500 * time.Millisecond
-	displayRefreshRate      = 200 * time.Millisecond
-=======
 	displayRefreshRate      = 100 * time.Millisecond
->>>>>>> Stashed changes
 	minTermWidth            = 48
 	minTermHeight           = 22
 	logLinesToDisplay       = 10
@@ -319,12 +314,7 @@ func (t *TUI) View() string {
 }
 
 func (t *TUI) renderStatusBarContent() string {
-<<<<<<< Updated upstream
-	sysTime := t.service.ReadTime()
-	preferredTZ := sysTime.In(t.timezone)
-=======
 	preferredTZ := t.service.SystemTime.In(t.timezone)
->>>>>>> Stashed changes
 	fmtTime := fmt.Sprintf("%s (%v)", preferredTZ.Format(time.StampMilli), preferredTZ.Location())
 	return t.styles.StatusBar.Render(fmtTime)
 }
@@ -335,12 +325,7 @@ func (t *TUI) renderPortfolioContent() string {
 
 func (t *TUI) renderWatchlistContent() string {
 	content := ""
-<<<<<<< Updated upstream
-	tickers := t.service.ReadTickers()
-	for _, ticker := range tickers {
-=======
 	for _, ticker := range t.service.Tickers {
->>>>>>> Stashed changes
 		styledPrice := ""
 		prev := ticker.PrevLast()
 		last := ticker.Last()
@@ -362,21 +347,12 @@ func (t *TUI) renderWatchlistContent() string {
 
 func (t *TUI) renderChartContent() string {
 	content := ""
-<<<<<<< Updated upstream
-	bars := t.service.ReadBars()
-	if len(bars) != 0 {
-		for _, b := range bars {
-			content += fmt.Sprintf("%v %.2f, Vol: %v, BarCount: %v\n", b.Date, b.Close, b.Volume, b.BarCount)
-		}
-		slog.Debug(strconv.Itoa(len(bars)))
-=======
 	if len(t.service.Bars) != 0 {
 		for _, b := range t.service.Bars {
 			content += fmt.Sprintf("%v O:%.2f H:%.2f L:%.2f C:%.2f Vol: %v, BarCount: %v\n",
 			b.Date, b.Open, b.High, b.Low, b.Close, b.Volume, b.BarCount)
 		}
 		slog.Debug(strconv.Itoa(len(t.service.Bars)))
->>>>>>> Stashed changes
 	}
 	return content
 }
