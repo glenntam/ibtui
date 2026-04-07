@@ -1,4 +1,4 @@
-package layout
+package panel
 
 import (
 	"github.com/charmbracelet/lipgloss"
@@ -13,6 +13,8 @@ const (
 type Styles struct {
 	RedFG           lipgloss.Style
 	RedBG           lipgloss.Style
+	RedBrightFG     lipgloss.Style
+	RedBrightBG     lipgloss.Style
 	GreenFG         lipgloss.Style
 	GreenBG         lipgloss.Style
 	BlueFG          lipgloss.Style
@@ -54,13 +56,17 @@ func DefaultTheme() *Styles {
 
 		RedBG: lipgloss.NewStyle().Background(lipgloss.Color("52")),
 
+		RedBrightFG: lipgloss.NewStyle().Foreground(lipgloss.Color("1")),
+
+		RedBrightBG: lipgloss.NewStyle().Background(lipgloss.Color("1")),
+
 		GreenFG: lipgloss.NewStyle().Foreground(lipgloss.Color("22")),
 
 		GreenBG: lipgloss.NewStyle().Background(lipgloss.Color("22")),
 
-		BlueFG: lipgloss.NewStyle().Foreground(lipgloss.Color("4")),
+		BlueFG: lipgloss.NewStyle().Foreground(lipgloss.Color("12")),
 
-		BlueBG: lipgloss.NewStyle().Background(lipgloss.Color("4")),
+		BlueBG: lipgloss.NewStyle().Background(lipgloss.Color("12")),
 
 		YellowFG: lipgloss.NewStyle().Foreground(lipgloss.Color("3")),
 

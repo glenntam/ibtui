@@ -1,5 +1,5 @@
-// Package layout contains styling components to render tabs and borders for the TUI.
-package layout
+// Package panel contains various components to render each tab.
+package panel
 
 import (
 	"strings"

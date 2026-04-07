@@ -10,11 +10,13 @@ import (
 	"unicode/utf8"
 
 	"github.com/glenntam/ibtui/internal/service"
-	"github.com/glenntam/ibtui/internal/tui/layout"
+	"github.com/glenntam/ibtui/internal/tui/panel"
 	"github.com/glenntam/ibtui/internal/typewriter"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/NimbleMarkets/ntcharts/canvas"
+	"github.com/NimbleMarkets/ntcharts/canvas/graph"
 	"github.com/scmhub/ibsync"
 	"golang.org/x/term"
 )
@@ -52,8 +54,8 @@ type TUI struct {
 	logLines  []string
 
 	timezone        *time.Location
-	styles          *layout.Styles
-	panels          []*layout.Panel
+	styles          *panel.Styles
+	panels          []*panel.Panel
 	statusBar       string
 	helpBar         string
 	prevSelectedTab int
@@ -113,49 +115,49 @@ func (t *TUI) Init() tea.Cmd {
 	}
 
 	// Get lipgloss styles
-	t.styles = layout.DefaultTheme()
+	t.styles = panel.DefaultTheme()
 
 	// Arrange initial tab grouping:
-	t.panels = append(t.panels, &layout.Panel{
+	t.panels = append(t.panels, &panel.Panel{
 		Index: nofocus,
 	})
-	t.panels = append(t.panels, &layout.Panel{
+	t.panels = append(t.panels, &panel.Panel{
 		Index:    portfolio,
 		Tab:      "1. Porfolio",
 		Content:  "",
 		Revealed: false,
 	})
-	t.panels = append(t.panels, &layout.Panel{
+	t.panels = append(t.panels, &panel.Panel{
 		Index:    watchlist,
 		Tab:      "2. Watchlist",
 		Content:  "",
 		Revealed: true,
 	})
-	t.panels = append(t.panels, &layout.Panel{
+	t.panels = append(t.panels, &panel.Panel{
 		Index:    chart,
 		Tab:      "3. Chart",
 		Content:  "",
 		Revealed: true,
 	})
-	t.panels = append(t.panels, &layout.Panel{
+	t.panels = append(t.panels, &panel.Panel{
 		Index:    algos,
 		Tab:      "4. Algos",
 		Content:  "",
 		Revealed: false,
 	})
-	t.panels = append(t.panels, &layout.Panel{
+	t.panels = append(t.panels, &panel.Panel{
 		Index:    logs,
 		Tab:      "5. Log ",
 		Content:  "",
 		Revealed: true,
 	})
-	t.panels = append(t.panels, &layout.Panel{
+	t.panels = append(t.panels, &panel.Panel{
 		Index:    orders,
 		Tab:      "6. Open Orders",
 		Content:  "",
 		Revealed: false,
 	})
-	t.panels = append(t.panels, &layout.Panel{
+	t.panels = append(t.panels, &panel.Panel{
 		Index:    trades,
 		Tab:      "7. Trade Log",
 		Content:  "",
@@ -292,19 +294,19 @@ func (t *TUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) { //nolint:ireturn
 
 // View gathers the TUI model state and renders the data to screen.
 func (t *TUI) View() string {
-	top := layout.RenderHorizontalGroup(
+	top := panel.RenderHorizontalGroup(
 		t.panels[portfolio:chart],
 		t.styles,
 		t.selectedTab,
 		t.screenWidth,
 	)
-	middle := layout.RenderHorizontalGroup(
+	middle := panel.RenderHorizontalGroup(
 		t.panels[chart:logs],
 		t.styles,
 		t.selectedTab,
 		t.screenWidth,
 	)
-	bottom := layout.RenderHorizontalGroup(
+	bottom := panel.RenderHorizontalGroup(
 		t.panels[logs:],
 		t.styles,
 		t.selectedTab,
@@ -348,11 +350,33 @@ func (t *TUI) renderWatchlistContent() string {
 func (t *TUI) renderChartContent() string {
 	content := ""
 	if len(t.service.Bars) != 0 {
-		for _, b := range t.service.Bars {
-			content += fmt.Sprintf("%v O:%.2f H:%.2f L:%.2f C:%.2f Vol: %v, BarCount: %v\n",
-			b.Date, b.Open, b.High, b.Low, b.Close, b.Volume, b.BarCount)
+		w := 11
+		h := 20
+		chart := canvas.New(w, h)
+		cursor := canvas.Point{0, h - 1}
+		chart.Clear()
+		graph.DrawXYAxis(&chart, cursor, t.styles.BlueFG)
+
+		bars := make([]ibsync.Bar, len(t.service.Bars))
+		t.service.BarsMutex.RLock()
+		copy(bars, t.service.Bars)
+		t.service.BarsMutex.RUnlock()
+
+		for i, b := range bars {
+			x := i + 1
+			l := ((b.Low - t.service.BarsMin) / (t.service.BarsMax - t.service.BarsMin) * float64(h-1))
+			bl := ((b.Open - t.service.BarsMin) / (t.service.BarsMax - t.service.BarsMin) * float64(h-1))
+			bh := ((b.Close - t.service.BarsMin) / (t.service.BarsMax - t.service.BarsMin) * float64(h-1))
+			h := ((b.High - t.service.BarsMin) / (t.service.BarsMax - t.service.BarsMin) * float64(h-1))
+			s := t.styles.GreenFG
+			if b.Open > b.Close {
+				s = t.styles.RedBrightFG
+				bl, bh = bh, bl
+			}
+			//t.logger.Debug("b", "l", l, "bl", bl, "bh", bh, "h", h)
+			graph.DrawCandlestickBottomToTop(&chart, cursor.Add(canvas.Point{X: x, Y: -1}), l, bl, bh, h, s)
 		}
-		slog.Debug(strconv.Itoa(len(t.service.Bars)))
+		content = chart.View()
 	}
 	return content
 }
