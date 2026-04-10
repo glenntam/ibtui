@@ -349,8 +349,9 @@ func (t *TUI) renderWatchlistContent() string {
 
 func (t *TUI) renderChartContent() string {
 	content := ""
+
 	if len(t.service.Bars) != 0 {
-		w := 11
+		w := len(t.service.Bars) + 1
 		h := 20
 		chart := canvas.New(w, h)
 		cursor := canvas.Point{0, h - 1}
@@ -376,7 +377,14 @@ func (t *TUI) renderChartContent() string {
 			//t.logger.Debug("b", "l", l, "bl", bl, "bh", bh, "h", h)
 			graph.DrawCandlestickBottomToTop(&chart, cursor.Add(canvas.Point{X: x, Y: -1}), l, bl, bh, h, s)
 		}
-		content = chart.View()
+		chartView := chart.View()
+		spaces := w - utf8.RuneCountInString(bars[0].Date) - utf8.RuneCountInString(bars[len(bars)-1].Date)
+		if spaces < 0 {
+			spaces = 0
+		}
+		x := bars[0].Date + strings.Repeat(" ", spaces) + bars[len(bars)-1].Date
+		y := strconv.FormatFloat(t.service.BarsMax, 'f', 2, 64) + strings.Repeat("\n", h-1) + strconv.FormatFloat(t.service.BarsMin, 'f', 2, 64)
+		content = lipgloss.JoinHorizontal(lipgloss.Top, y, lipgloss.JoinVertical(lipgloss.Left, chartView, x))
 	}
 	return content
 }
