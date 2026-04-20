@@ -350,25 +350,25 @@ func (t *TUI) renderWatchlistContent() string {
 func (t *TUI) renderChartContent() string {
 	content := ""
 
-	if len(t.service.Bars) != 0 {
-		w := len(t.service.Bars) + 1
+	if len(t.service.ChartL.Bars) != 0 {
+		w := len(t.service.ChartL.Bars) + 1
 		h := 20
 		chart := canvas.New(w, h)
 		cursor := canvas.Point{0, h - 1}
 		chart.Clear()
 		graph.DrawXYAxis(&chart, cursor, t.styles.BlueFG)
 
-		bars := make([]ibsync.Bar, len(t.service.Bars))
-		t.service.BarsMutex.RLock()
-		copy(bars, t.service.Bars)
-		t.service.BarsMutex.RUnlock()
+		bars := make([]ibsync.Bar, len(t.service.ChartL.Bars))
+		t.service.ChartL.Mutex.RLock()
+		copy(bars, t.service.ChartL.Bars)
+		t.service.ChartL.Mutex.RUnlock()
 
 		for i, b := range bars {
 			x := i + 1
-			l := ((b.Low - t.service.BarsMin) / (t.service.BarsMax - t.service.BarsMin) * float64(h-1))
-			bl := ((b.Open - t.service.BarsMin) / (t.service.BarsMax - t.service.BarsMin) * float64(h-1))
-			bh := ((b.Close - t.service.BarsMin) / (t.service.BarsMax - t.service.BarsMin) * float64(h-1))
-			h := ((b.High - t.service.BarsMin) / (t.service.BarsMax - t.service.BarsMin) * float64(h-1))
+			l := ((b.Low - t.service.ChartL.PriceMin) / (t.service.ChartL.PriceMax - t.service.ChartL.PriceMin) * float64(h-1))
+			bl := ((b.Open - t.service.ChartL.PriceMin) / (t.service.ChartL.PriceMax - t.service.ChartL.PriceMin) * float64(h-1))
+			bh := ((b.Close - t.service.ChartL.PriceMin) / (t.service.ChartL.PriceMax - t.service.ChartL.PriceMin) * float64(h-1))
+			h := ((b.High - t.service.ChartL.PriceMin) / (t.service.ChartL.PriceMax - t.service.ChartL.PriceMin) * float64(h-1))
 			s := t.styles.GreenFG
 			if b.Open > b.Close {
 				s = t.styles.RedBrightFG
@@ -383,7 +383,7 @@ func (t *TUI) renderChartContent() string {
 			spaces = 0
 		}
 		x := bars[0].Date + strings.Repeat(" ", spaces) + bars[len(bars)-1].Date
-		y := strconv.FormatFloat(t.service.BarsMax, 'f', 2, 64) + strings.Repeat("\n", h-1) + strconv.FormatFloat(t.service.BarsMin, 'f', 2, 64)
+		y := strconv.FormatFloat(t.service.ChartL.PriceMax, 'f', 2, 64) + strings.Repeat("\n", h-1) + strconv.FormatFloat(t.service.ChartL.PriceMin, 'f', 2, 64)
 		content = lipgloss.JoinHorizontal(lipgloss.Top, y, lipgloss.JoinVertical(lipgloss.Left, chartView, x))
 	}
 	return content

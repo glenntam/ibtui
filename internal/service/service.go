@@ -9,14 +9,11 @@ import (
 	"log/slog"
 	"sync"
 	"strconv"
-	// "strings"
 	"time"
 
 	"github.com/glenntam/ibtui/internal/zerobridge"
 
 	"github.com/rs/zerolog"
-	//"github.com/scmhub/ibapi"
-	//"github.com/robaho/fixed"
 	"github.com/scmhub/ibsync"
 )
 
@@ -55,6 +52,18 @@ var barSize = map[string]time.Duration{
 	"1 week":  7 * 24 * time.Hour,
 }
 
+type Chart struct {
+	Bars           []ibsync.Bar
+	Mutex          sync.RWMutex
+	PriceMin       float64
+	PriceMax       float64
+	barChan        chan ibsync.Bar
+	cancelReqHist  ibsync.CancelFunc
+	cancelBars     context.CancelFunc
+	lastTickerTime string
+	secondLastBar  ibsync.Bar
+}
+
 // IBService continuously gets the IB account state and makes it suitable for TUI consumption.
 type IBService struct {
 	ib     *ibsync.IB
@@ -70,17 +79,21 @@ type IBService struct {
 	tickerIdx     map[int64]*ibsync.Ticker
 	cancelTickers context.CancelFunc
 
-	Bars          []ibsync.Bar
-	BarsMin       float64
-	BarsMax       float64
-	BarsMutex     sync.RWMutex
-	barChan       chan ibsync.Bar
-	cancelReqHist ibsync.CancelFunc
-	cancelBars    context.CancelFunc
-	LastBarTime   string
-	secondLastBar ibsync.Bar
+	ChartL *Chart
+	ChartR *Chart
 
 	ServiceStarted bool
+}
+
+func NewChart(contract *ibsync.Contract, ticker *ibsync.Ticker, wg *sync.WaitGroup, ib *ibsync.IB) *Chart {
+	c := &Chart{
+		cancelReqHist:  func() {},
+		cancelBars:     func() {},
+		lastTickerTime: string(time.Now().Unix()),
+	}
+	c.Bars = make([]ibsync.Bar, 0)
+	c.StartBars(contract, ticker, wg, ib)
+	return c
 }
 
 // NewIBService instantiates a new IBService and connects to the IB client.
@@ -94,15 +107,9 @@ func NewIBService(host string, port, clientID int, contracts []*ibsync.Contract,
 		logger:           logger,
 		Contracts:        contracts,
 		SystemTime:       &now,
-		LastBarTime:         string(now.Unix()),
 		cancelSystemTime: func() {},
 		cancelTickers:    func() {},
-		cancelBars:       func() {},
-		cancelReqHist:    func() {},
 	}
-	//ibs.Bars([]ibsync.Bar{})
-	//ibs.stopTickers()
-	//ibs.stopBars()
 
 	// Connect to IB
 	ibs.ib = ibsync.NewIB()
@@ -126,28 +133,31 @@ func NewIBService(host string, port, clientID int, contracts []*ibsync.Contract,
 }
 
 // StartIBService begins grabbing data from the IB client.
-// It should be run after the TUI is drawn, since StartIBService takes time to populate.
+// It should be run after the TUI is rendered, since StartIBService takes time to populate.
 func (ibs *IBService) StartIBService() {
 	ibs.wg.Add(1)
-	go func() {
-		defer ibs.wg.Done()
-		err := ibs.ib.QualifyContract(ibs.Contracts...)
-		if err != nil {
-			ibs.logger.Error("couldn't qualify contracts", "err", err)
-			return
-		}
-		ibs.startSystemTime(sysTimeRefresh)
-		ibs.startTickers()
-		ibs.StartBars(ibs.Contracts[0])
-		ibs.ServiceStarted = true
-	}()
+	//go func() {
+	//	defer ibs.wg.Done()
+	err := ibs.ib.QualifyContract(ibs.Contracts...)
+	if err != nil {
+		ibs.logger.Error("couldn't qualify contracts", "err", err)
+		return
+	}
+	ibs.startSystemTime(sysTimeRefresh)
+	ibs.startTickers()
+
+		// ibs.StartBars(ibs.Contracts[0])
+	//}()
+	ibs.ChartL = NewChart(ibs.Contracts[0], ibs.Tickers[0], &ibs.wg, ibs.ib)
+
+	ibs.ServiceStarted = true
 }
 
 // StopIBService gracefully disconnects the IB Client and cancels existing contexts.
 func (ibs *IBService) StopIBService() {
 	ibs.cancelSystemTime()
 	ibs.stopTickers()
-	ibs.stopBars()
+	ibs.ChartL.stopBars()
 	ibs.wg.Wait()
 	if ibs.ib == nil {
 		return
@@ -215,125 +225,88 @@ func (ibs *IBService) stopTickers() {
 }
 
 // Bars
-// func (ibs *IBService) StartBars2(contract *ibsync.Contract) {
-//     ibs.stopBars2()
-//     var ctx context.Context
-//     ctx, ibs.cancelBars = context.WithCancel(context.Background())
-//     ibs.wg.Add(1)
-//     go func() {
-//         defer ibs.wg.Done()
-//         for {
-//             select {
-//             case <-ctx.Done():
-//                 return
-//             default:
-//             }
-//             ibs.barChan, _ = ibs.ib.ReqHistoricalData(contract, "", "1 D", "1 hour", "TRADES", false, 1)
-//             select {
-//             case <-ctx.Done():
-//                 return
-//             default:
-//             }
-//             var bars []ibsync.Bar
-//             for b := range ibs.barChan {
-//                 bars = append(bars, b)
-//             }
-//             ibs.Bars = bars
-
-//         }
-//     }()
-// }
-
-// func (ibs *IBService) stopBars2() {
-//     ibs.cancelBars()
-//     ibs.Bars = make([]ibsync.Bar, 0)
-// }
-
-func (ibs *IBService) StartBars(contract *ibsync.Contract) {
-	ibs.stopBars()
+func (c *Chart) StartBars(con *ibsync.Contract, t *ibsync.Ticker, wg *sync.WaitGroup, ib *ibsync.IB) {
+	c.stopBars()
 	var ctx context.Context
-	ctx, ibs.cancelBars = context.WithCancel(context.Background())
-	ibs.wg.Add(1)
-	ibs.logger.Debug("startbars")
+	ctx, c.cancelBars = context.WithCancel(context.Background())
+	wg.Add(1)
 	go func() {
-		defer ibs.wg.Done()
+		defer wg.Done()
 		reqHistDone := make(chan struct{})
 		go func() {
-			ibs.barChan, ibs.cancelReqHist = ibs.ib.ReqHistoricalDataUpToDate(contract, "60 S", "10 secs", "TRADES", false, 1)
-			ibs.logger.Debug("req up to date started")
-			close(reqHistDone)
+			c.barChan, c.cancelReqHist = ib.ReqHistoricalDataUpToDate(con, "60 S", "5 secs", "TRADES", false, 1)
+			close(reqHistDone) // Keep this thread running until ibs.cancelReqHist is called elsewhere.
 		}()
 
 		select {
 		case <-ctx.Done():
-			ibs.stopBars()
+			c.stopBars()
 			return
-		case <-reqHistDone:
+		case <-reqHistDone:  // While reqHistDone is unclosed and the above ReqHistoricalDataUpToDate is still running.
 			for {
 				select {
 				case <-ctx.Done():
-					ibs.stopBars()
+					c.stopBars()
 					return
-				case bar, ok := <-ibs.barChan: // Receive new bars; but IB only sends every 5 seconds (IB pacing limit).
+				case bar, ok := <-c.barChan: // Receive new bars; but IB only sends every 5 seconds (IB pacing limit).
 					if !ok {
-						continue
+						continue  // No new bar updates. Start the for-select loop again and try current ticker data.
 					}
-					if ibs.BarsMax < bar.High {
-						ibs.BarsMax = bar.High
+					if c.PriceMax < bar.High {
+						c.PriceMax = bar.High
 					}
-					if ibs.BarsMin == 0.0 || ibs.BarsMin > bar.Low {
-						ibs.BarsMin = bar.Low
+					if c.PriceMin == 0.0 || c.PriceMin > bar.Low {
+						c.PriceMin = bar.Low
 					}
 
-					ibs.BarsMutex.Lock()
-					if len(ibs.Bars) == 0 {
-						ibs.Bars = append(ibs.Bars, bar)
-					} else if ibs.Bars[len(ibs.Bars)-1].Date == bar.Date {
-						ibs.Bars[len(ibs.Bars)-1] = bar
+					c.Mutex.Lock()
+					if len(c.Bars) == 0 {
+						c.Bars = append(c.Bars, bar)
+					} else if c.Bars[len(c.Bars)-1].Date == bar.Date {
+						c.Bars[len(c.Bars)-1] = bar
 					} else {
-						ibs.Bars = append(ibs.Bars, bar)
-						ibs.Bars[len(ibs.Bars)-2] = ibs.secondLastBar
+						c.Bars = append(c.Bars, bar)
+						c.Bars[len(c.Bars)-2] = c.secondLastBar
 					}
-					ibs.BarsMutex.Unlock()
-					ibs.secondLastBar = bar
+					c.Mutex.Unlock()
+					c.secondLastBar = bar
 
 				default: // If no new bars in the meantime, continually update last bar with current ticker data
-					for _, t := range ibs.Tickers {
-						if len(ibs.Bars) > 0 && t.Contract().ConID == contract.ConID {
-							// NOTE: Try to continually increment the latest bar volume with each individual tick.
-							// It's not perfect, but quite close.
-							prevVol := ibs.Bars[len(ibs.Bars)-1].Volume.Int()
-							incrementVol := int64(0)
+					if len(c.Bars) > 0 && t.Contract().ConID == con.ConID {
+						// NOTE: Try to continually increment the latest bar volume with each individual tick.
+						// It's not perfect, but quite close.
+						lastBar := c.Bars[len(c.Bars)-1]
+						prevVol := lastBar.Volume.Int()
+						incrementVol := int64(0)
 
-							if ibs.LastBarTime != t.LastTimestamp() &&
-							t.Last() != t.PrevLast() &&
-							t.LastSize() != t.PrevLastSize() &&
-							t.Bid() != t.PrevBid() &&
-							t.BidSize() != t.PrevBidSize() &&
-							t.Ask() != t.PrevAsk() &&
-							t.AskSize() != t.PrevAskSize() {
-								incrementVol = t.LastSize().Int()
-								ibs.LastBarTime = t.LastTimestamp()
-							}
-							vol64 := prevVol + incrementVol
-							volDec := ibsync.StringToDecimal(strconv.FormatInt(vol64, 10))
+						if c.lastTickerTime != t.LastTimestamp() &&
+						t.Last() != t.PrevLast() &&
+						t.LastSize() != t.PrevLastSize() &&
+						t.Bid() != t.PrevBid() &&
+						t.BidSize() != t.PrevBidSize() &&
+						t.Ask() != t.PrevAsk() &&
+						t.AskSize() != t.PrevAskSize() {
+							incrementVol = t.LastSize().Int()
+							c.lastTickerTime = t.LastTimestamp()
+						}
+						vol64 := prevVol + incrementVol
+						volDec := ibsync.StringToDecimal(strconv.FormatInt(vol64, 10))
 
-							ibs.BarsMutex.Lock()
-							ibs.Bars[len(ibs.Bars)-1].Volume = volDec
-							ibs.Bars[len(ibs.Bars)-1].Close = t.Last()
-							if t.Last() > ibs.Bars[len(ibs.Bars)-1].High {
-								ibs.Bars[len(ibs.Bars)-1].High = t.Last()
-							}
-							if t.Last() < ibs.Bars[len(ibs.Bars)-1].Low {
-								ibs.Bars[len(ibs.Bars)-1].Low = t.Last()
-							}
-							ibs.BarsMutex.Unlock()
-							if ibs.BarsMax < t.Last() {
-								ibs.BarsMax = t.Last()
-							}
-							if ibs.BarsMin == 0.0 || ibs.BarsMin > t.Last() {
-								ibs.BarsMin = t.Last()
-							}
+						c.Mutex.Lock()
+						lastBar.Volume = volDec
+						lastBar.Close = t.Last()
+						if t.Last() > lastBar.High {
+							lastBar.High = t.Last()
+						}
+						if t.Last() < lastBar.Low {
+							lastBar.Low = t.Last()
+						}
+						c.Mutex.Unlock()
+						if c.PriceMax < t.Last() {
+							c.PriceMax = t.Last()
+						}
+						if c.PriceMin == 0.0 || c.PriceMin > t.Last() {
+							c.PriceMin = t.Last()
 						}
 					}
 				}
@@ -342,10 +315,10 @@ func (ibs *IBService) StartBars(contract *ibsync.Contract) {
 	}()
 }
 
-func (ibs *IBService) stopBars() {
-	ibs.cancelReqHist()
-	ibs.cancelBars()
-	ibs.BarsMutex.Lock()
-	ibs.Bars = make([]ibsync.Bar, 0)
-	ibs.BarsMutex.Unlock()
+func (c *Chart) stopBars() {
+	c.cancelReqHist()
+	c.cancelBars()
+	c.Mutex.Lock()
+	c.Bars = make([]ibsync.Bar, 0)
+	c.Mutex.Unlock()
 }
