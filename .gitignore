@@ -2,6 +2,8 @@
 .env
 logfile.json
 /ibtui
+.DS_Store
+.lsp.json
 
 /ibapi/**
 /ibsync/**
