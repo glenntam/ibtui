@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	ibPort      = 4001
+	ibPort      = 7496
 	ibHost      = "localhost"
 	ibClientID  = 0
 	logFilename = "logfile.json"
@@ -36,7 +36,7 @@ func main() {
 	}
 	ibs, err := service.NewIBService(ibHost, ibPort, ibClientID, contracts, msl.Logger)
 	if err != nil {
-		panic(nil)
+		slog.Error("Couldn't start service", "err", err)
 	}
 
 	// TUI
@@ -46,6 +46,6 @@ func main() {
 	p := tea.NewProgram(tui, tea.WithAltScreen())
 	_, err = p.Run()
 	if err != nil {
-		panic(err)
+		slog.Error("Couldn't run Tea program", "err", err)
 	}
 }

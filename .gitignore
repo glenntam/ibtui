@@ -1,6 +1,8 @@
 # ibtui specific:
 .env
 logfile.json
+.DS_Store
+.lsp.json
 /ibtui
 
 /ibapi/**
