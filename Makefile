@@ -1,27 +1,87 @@
-.PHONY: all build clean check run update
-
 APP := ibtui
+CMD_DIR := ./cmd/ibtui
+GO := go
 
-all: check run
+.PHONY: all build check clean count debug deps help run update
+all: help
 
+## build: Build the executable
 build:
-	go build -o $(APP) ./cmd/ibtui
+	$(GO) build -o $(APP) $(CMD_DIR)
 
-clean:
-	rm -f ./$(APP)
-
+## check: Perform lints and tests
 check:
-	gofumpt -d -e -extra . | colordiff | \less -iMRX
-	golangci-lint run -E asciicheck,bidichk,bodyclose,canonicalheader,containedctx,contextcheck,copyloopvar,decorder,dogsled,dupl,dupword,durationcheck,embeddedstructfieldcheck,err113,errcheck,errchkjson,errname,errorlint,exhaustive,exptostd,fatcontext,forcetypeassert,funcorder,gocheckcompilerdirectives,gochecknoglobals,gochecksumtype,gocognit,goconst,gocritic,gocyclo,godoclint,godot,godox,goheader,gomoddirectives,gomodguard,goprintffuncname,gosec,govet,grouper,iface,importas,inamedparam,ineffassign,interfacebloat,intrange,iotamixing,ireturn,lll,loggercheck,maintidx,makezero,mirror,misspell,mnd,musttag,nakedret,nestif,nilerr,nilnesserr,nilnil,noctx,nolintlint,nonamedreturns,nosprintfhostport,perfsprint,prealloc,predeclared,promlinter,protogetter,reassign,recvcheck,revive,rowserrcheck,sloglint,sqlclosecheck,tagalign,tagliatelle,testableexamples,thelper,tparallel,unconvert,unparam,unqueryvet,unused,usestdlibvars,usetesting,wastedassign,whitespace,wrapcheck,zerologlint --color always | \less -iMRFX
+	golangci-lint run --show-stats --color always | \less -iMRFX
+	govulncheck ./...
 	go test ./...
 	@printf "Press Enter to continue..."; read dummy
 
+## clean: Remove any build artifacts from the directory tree
+clean:
+	rm -f ./$(APP)
+
+## count: Count the LOCs in the codebase
+count:
+	@find . \
+		-type d -name '_*' -prune -o \
+		-type f -name '*.go' ! -name '_*.go' -print | \
+	while IFS= read -r file; do \
+		awk '\
+			/^[[:space:]]*$$/ { \
+				bloc++; \
+				next; \
+			} \
+			/^[[:space:]]*\/\// { \
+				cloc++; \
+				next; \
+			} \
+			{ \
+				sloc++; \
+			} \
+			END { \
+				printf "%d %d %d\n", sloc+0, cloc+0, bloc+0; \
+			} \
+		' "$$file"; \
+	done | \
+	awk '\
+		{ \
+			sloc += $$1; \
+			cloc += $$2; \
+			bloc += $$3; \
+		} \
+		END { \
+			total = sloc + cloc + bloc; \
+			printf "SLOC : %d\n", sloc; \
+			printf "CLOC : %d\n", cloc; \
+			printf "BLOC : %d\n", bloc; \
+			printf "TOTAL: %d\n", total; \
+		} \
+	'
+
+## debug: Run a skeleton binary to test temporary code
 debug:
-	go run ./cmd/debug/...
+	$(GO) run ./cmd/debug/...
 
-run: clean build
-	./$(APP)
+## deps: Update all module dependencies, including linters
+deps:
+	$(GO) install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+	$(GO) install golang.org/x/vuln/cmd/govulncheck@latest
+	$(GO) get -u ./...
+	$(GO) mod tidy
 
-update:
-	go get -u ./...
-	go mod tidy
+## help: Print this help message
+help:
+	@echo ''
+	@echo 'USAGE'
+	@echo '    make [target]'
+	@echo ''
+	@echo 'TARGETS'
+	@sed -n 's/^##//p' ${MAKEFILE_LIST} | column -t -s ':' |  sed -e 's/^/   /'
+	@echo ''
+	@echo 'EXAMPLE'
+	@echo '    "make run"'
+	@echo ''
+
+## run: Temporarily run the binary
+run:
+	$(GO) run $(CMD_DIR)

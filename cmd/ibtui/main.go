@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	ibPort      = 4001
+	ibPort      = 7496
 	ibHost      = "localhost"
 	ibClientID  = 0
 	logFilename = "logfile.json"
