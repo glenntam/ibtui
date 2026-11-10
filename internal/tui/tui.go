@@ -94,7 +94,11 @@ func NewTUIApp(service *service.IBService, logger *slog.Logger, logFile *os.File
 
 // Init is called once before the TUI loops. Use it to kick off a cmd.
 func (t *TUI) Init() tea.Cmd {
-	t.service.StartIBService()
+	err := t.service.StartIBService()
+	if err != nil {
+		t.logger.Error("couldn't start IBService", "err", err)
+		return tea.Quit
+	}
 	// Use x/term to set init screen size before Update() runs
 	termWidth, termHeight, err := term.GetSize(int(os.Stdout.Fd()))
 	if err != nil {

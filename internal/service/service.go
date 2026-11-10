@@ -134,7 +134,7 @@ func NewIBService(host string, port, clientID int, contracts []*ibsync.Contract,
 
 // StartIBService begins grabbing data from the IB client.
 // It should be run after the TUI is rendered, since StartIBService takes time to populate.
-func (ibs *IBService) StartIBService() {
+func (ibs *IBService) StartIBService() error {
 	ibs.wg.Add(1)
 	//go func() {
 	//	defer ibs.wg.Done()
@@ -146,11 +146,12 @@ func (ibs *IBService) StartIBService() {
 	ibs.startSystemTime(sysTimeRefresh)
 	ibs.startTickers()
 
-		// ibs.StartBars(ibs.Contracts[0])
+	ibs.StartBars(ibs.Contracts[0])
 	//}()
 	ibs.ChartL = NewChart(ibs.Contracts[0], ibs.Tickers[0], &ibs.wg, ibs.ib)
 
 	ibs.ServiceStarted = true
+	return nil
 }
 
 // StopIBService gracefully disconnects the IB Client and cancels existing contexts.
@@ -218,7 +219,7 @@ func (ibs *IBService) startTickers() {
 	}
 }
 
-// stopTickers cancels any existing Tickers and makes a blank slick of Tickers
+// stopTickers cancels any existing Tickers and makes a blank slice of Tickers
 func (ibs *IBService) stopTickers() {
 	ibs.cancelTickers()
 	ibs.Tickers = make([]*ibsync.Ticker, 0, len(ibs.Contracts))

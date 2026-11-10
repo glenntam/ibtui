@@ -31,8 +31,8 @@ func main() {
 
 	// IB service
 	contracts := []*ibsync.Contract{
-		ibsync.NewFuture("MNQ", "202606", "CME", "2", "USD"),
-		ibsync.NewFuture("MES", "202606", "CME", "5", "USD"),
+		ibsync.NewFuture("MNQ", "202612", "CME", "2", "USD"),
+		ibsync.NewFuture("MES", "202612", "CME", "5", "USD"),
 	}
 	ibs, err := service.NewIBService(ibHost, ibPort, ibClientID, contracts, msl.Logger)
 	if err != nil {
