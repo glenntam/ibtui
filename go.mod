@@ -9,7 +9,7 @@ require (
 	github.com/glenntam/multislog v0.1.5
 	github.com/rs/zerolog v1.35.1
 	github.com/scmhub/ibsync v0.10.50
-	golang.org/x/term v0.47.0
+	golang.org/x/term v0.48.0
 )
 
 require (
@@ -34,8 +34,8 @@ require (
 	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/robaho/fixed v0.0.0-20251201003256-beee5759f86a // indirect
 	github.com/scmhub/ibapi v0.10.50 // indirect
-	github.com/xo/terminfo v1.2.0 // indirect
-	golang.org/x/sys v0.49.0 // indirect
-	golang.org/x/text v0.43.0 // indirect
+	github.com/xo/terminfo v1.3.1 // indirect
+	golang.org/x/sys v0.50.0 // indirect
+	golang.org/x/text v0.44.0 // indirect
 	google.golang.org/protobuf v1.36.12 // indirect
 )

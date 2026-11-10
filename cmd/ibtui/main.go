@@ -31,12 +31,12 @@ func main() {
 
 	// IB service
 	contracts := []*ibsync.Contract{
-		ibsync.NewFuture("MNQ", "202606", "CME", "2", "USD"),
-		ibsync.NewFuture("MES", "202606", "CME", "5", "USD"),
+		ibsync.NewFuture("MNQ", "202612", "CME", "2", "USD"),
+		ibsync.NewFuture("MES", "202612", "CME", "5", "USD"),
 	}
 	ibs, err := service.NewIBService(ibHost, ibPort, ibClientID, contracts, msl.Logger)
 	if err != nil {
-		panic(nil)
+		slog.Error("Couldn't start service", "err", err)
 	}
 
 	// TUI
@@ -46,6 +46,6 @@ func main() {
 	p := tea.NewProgram(tui, tea.WithAltScreen())
 	_, err = p.Run()
 	if err != nil {
-		panic(err)
+		slog.Error("Couldn't run Tea program", "err", err)
 	}
 }
