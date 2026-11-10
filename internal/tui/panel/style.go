@@ -35,7 +35,7 @@ type Styles struct {
 	HelpBar         lipgloss.Style
 }
 
-// Default creates a struct of styles used by the TUI
+// DefaultTheme creates a struct of styles used by the TUI.
 func DefaultTheme() *Styles {
 	base := lipgloss.NewStyle().
 		// Height(10).

@@ -1,3 +1,4 @@
+// Package main runs the ibtui terminal user interface.
 package main
 
 import (
@@ -39,10 +40,9 @@ func main() {
 		slog.Error("Couldn't start service", "err", err)
 	}
 
-	// TUI
-	tui := tui.NewTUIApp(ibs, msl.Logger, msl.LogFile, msl.Timezone) // TUI needs references to the actual logfile and
-	                                                                 // preferred timezone. These may or may not be
-	                                                                 // provided by your logger if you don't use multislog.
+	// TUI needs references to the actual logfile and preferred timezone.
+	// These may or may not be provided by your logger if you don't use multislog.
+	tui := tui.NewTUIApp(ibs, msl.Logger, msl.LogFile, msl.Timezone)
 	p := tea.NewProgram(tui, tea.WithAltScreen())
 	_, err = p.Run()
 	if err != nil {

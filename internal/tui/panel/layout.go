@@ -24,9 +24,9 @@ func RenderHorizontalGroup(panels []*Panel, styles *Styles, selectedTab, width i
 	var content string
 	var focused bool
 	var style lipgloss.Style
-	tabStyles := make([]lipgloss.Style, 0)
-	tabs := make([]string, 0)
-	tabRow := make([]string, 0)
+	tabStyles := make([]lipgloss.Style, 0, len(panels))
+	tabs := make([]string, 0, len(panels))
+	tabRow := make([]string, 0, len(panels)+1)
 	tabsLength := 0
 
 	for i, p := range panels {

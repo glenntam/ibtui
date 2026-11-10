@@ -1,3 +1,4 @@
+// Package tui renders the ibtui terminal user interface.
 package tui
 
 import (
@@ -13,19 +14,19 @@ import (
 	"github.com/glenntam/ibtui/internal/tui/panel"
 	"github.com/glenntam/ibtui/internal/typewriter"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 	"github.com/NimbleMarkets/ntcharts/canvas"
 	"github.com/NimbleMarkets/ntcharts/canvas/graph"
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/scmhub/ibsync"
 	"golang.org/x/term"
 )
 
 const (
-	displayRefreshRate      = 100 * time.Millisecond
-	minTermWidth            = 48
-	minTermHeight           = 22
-	logLinesToDisplay       = 10
+	displayRefreshRate = 100 * time.Millisecond
+	minTermWidth       = 48
+	minTermHeight      = 22
+	logLinesToDisplay  = 10
 )
 
 const (
@@ -66,24 +67,13 @@ type TUI struct {
 
 type refreshDisplayMsg time.Time
 
-func (t *TUI) refreshDisplay() tea.Cmd {
-	if t.service.ServiceStarted {
-		t.statusBar = t.renderStatusBarContent()
-		t.panels[portfolio].Content = t.renderPortfolioContent()
-		t.panels[watchlist].Content = t.renderWatchlistContent()
-		t.panels[chart].Content = t.renderChartContent()
-		t.panels[algos].Content = t.renderAlgosContent()
-		t.panels[logs].Content = t.renderLogsContent()
-		t.panels[orders].Content = t.renderOrdersContent()
-		t.panels[trades].Content = t.renderTradesContent()
-		t.helpBar = t.renderHelpBarContent()
-	}
-    return tea.Tick(displayRefreshRate, func(t time.Time) tea.Msg {
-          return refreshDisplayMsg(t)
-    })
-}
-
-func NewTUIApp(service *service.IBService, logger *slog.Logger, logFile *os.File, preferredTimeZone *time.Location) *TUI {
+// NewTUIApp creates a new TUI backed by the given service and logger.
+func NewTUIApp(
+	service *service.IBService,
+	logger *slog.Logger,
+	logFile *os.File,
+	preferredTimeZone *time.Location,
+) *TUI {
 	return &TUI{
 		service:  service,
 		logger:   logger,
@@ -173,10 +163,9 @@ func (t *TUI) Init() tea.Cmd {
 }
 
 // Update catches keypresses and screen updates then passes them to View().
-func (t *TUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) { //nolint:ireturn
+func (t *TUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) { //nolint:ireturn // bubbletea requires this signature
 	var err error
 	switch msg := msg.(type) {
-
 	// bubbletea always sends tea.WindowSizeMsg on Update()'s first run
 	case tea.WindowSizeMsg:
 		t.screenWidth, t.screenHeight = msg.Width, msg.Height
@@ -195,64 +184,19 @@ func (t *TUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) { //nolint:ireturn
 			}
 			return t, tea.Quit
 		case strconv.Itoa(portfolio):
-			if t.selectedTab == portfolio {
-				t.selectedTab = nofocus
-			} else {
-				t.selectedTab = portfolio
-				t.panels[portfolio].Revealed = true
-				t.panels[watchlist].Revealed = false
-			}
+			t.toggleTab(portfolio, watchlist)
 		case strconv.Itoa(watchlist):
-			if t.selectedTab == watchlist {
-				t.selectedTab = nofocus
-			} else {
-				t.selectedTab = watchlist
-				t.panels[portfolio].Revealed = false
-				t.panels[watchlist].Revealed = true
-			}
+			t.toggleTab(watchlist, portfolio)
 		case strconv.Itoa(chart):
-			if t.selectedTab == chart {
-				t.selectedTab = nofocus
-			} else {
-				t.selectedTab = chart
-				t.panels[chart].Revealed = true
-				t.panels[algos].Revealed = false
-			}
+			t.toggleTab(chart, algos)
 		case strconv.Itoa(algos):
-			if t.selectedTab == algos {
-				t.selectedTab = nofocus
-			} else {
-				t.selectedTab = algos
-				t.panels[chart].Revealed = false
-				t.panels[algos].Revealed = true
-			}
+			t.toggleTab(algos, chart)
 		case strconv.Itoa(logs):
-			if t.selectedTab == logs {
-				t.selectedTab = nofocus
-			} else {
-				t.selectedTab = logs
-				t.panels[logs].Revealed = true
-				t.panels[orders].Revealed = false
-				t.panels[trades].Revealed = false
-			}
+			t.toggleTab(logs, orders, trades)
 		case strconv.Itoa(orders):
-			if t.selectedTab == orders {
-				t.selectedTab = nofocus
-			} else {
-				t.selectedTab = orders
-				t.panels[logs].Revealed = false
-				t.panels[orders].Revealed = true
-				t.panels[trades].Revealed = false
-			}
+			t.toggleTab(orders, logs, trades)
 		case strconv.Itoa(trades):
-			if t.selectedTab == trades {
-				t.selectedTab = nofocus
-			} else {
-				t.selectedTab = trades
-				t.panels[logs].Revealed = false
-				t.panels[orders].Revealed = false
-				t.panels[trades].Revealed = true
-			}
+			t.toggleTab(trades, logs, orders)
 		case "up", "k":
 			t.logFollow = false
 			t.panels[logs].Tab = "6. Log*"
@@ -315,6 +259,37 @@ func (t *TUI) View() string {
 	return lipgloss.JoinVertical(lipgloss.Left, t.statusBar, top, middle, bottom, t.helpBar)
 }
 
+// toggleTab selects tab, reveals it, and hides the given tabs.
+// Selecting the already-selected tab deselects it.
+func (t *TUI) toggleTab(tab int, hide ...int) {
+	if t.selectedTab == tab {
+		t.selectedTab = nofocus
+		return
+	}
+	t.selectedTab = tab
+	t.panels[tab].Revealed = true
+	for _, h := range hide {
+		t.panels[h].Revealed = false
+	}
+}
+
+func (t *TUI) refreshDisplay() tea.Cmd {
+	if t.service.ServiceStarted {
+		t.statusBar = t.renderStatusBarContent()
+		t.panels[portfolio].Content = t.renderPortfolioContent()
+		t.panels[watchlist].Content = t.renderWatchlistContent()
+		t.panels[chart].Content = t.renderChartContent()
+		t.panels[algos].Content = t.renderAlgosContent()
+		t.panels[logs].Content = t.renderLogsContent()
+		t.panels[orders].Content = t.renderOrdersContent()
+		t.panels[trades].Content = t.renderTradesContent()
+		t.helpBar = t.renderHelpBarContent()
+	}
+	return tea.Tick(displayRefreshRate, func(t time.Time) tea.Msg {
+		return refreshDisplayMsg(t)
+	})
+}
+
 func (t *TUI) renderStatusBarContent() string {
 	preferredTZ := t.service.SystemTime.In(t.timezone)
 	fmtTime := fmt.Sprintf("%s (%v)", preferredTZ.Format(time.StampMilli), preferredTZ.Location())
@@ -328,7 +303,7 @@ func (t *TUI) renderPortfolioContent() string {
 func (t *TUI) renderWatchlistContent() string {
 	content := ""
 	for _, ticker := range t.service.Tickers {
-		styledPrice := ""
+		var styledPrice string
 		prev := ticker.PrevLast()
 		last := ticker.Last()
 		switch {
@@ -354,7 +329,7 @@ func (t *TUI) renderChartContent() string {
 		w := len(t.service.Bars) + 1
 		h := 20
 		chart := canvas.New(w, h)
-		cursor := canvas.Point{0, h - 1}
+		cursor := canvas.Point{X: 0, Y: h - 1}
 		chart.Clear()
 		graph.DrawXYAxis(&chart, cursor, t.styles.BlueFG)
 
@@ -374,16 +349,16 @@ func (t *TUI) renderChartContent() string {
 				s = t.styles.RedBrightFG
 				bl, bh = bh, bl
 			}
-			//t.logger.Debug("b", "l", l, "bl", bl, "bh", bh, "h", h)
+			// t.logger.Debug("b", "l", l, "bl", bl, "bh", bh, "h", h)
 			graph.DrawCandlestickBottomToTop(&chart, cursor.Add(canvas.Point{X: x, Y: -1}), l, bl, bh, h, s)
 		}
 		chartView := chart.View()
 		spaces := w - utf8.RuneCountInString(bars[0].Date) - utf8.RuneCountInString(bars[len(bars)-1].Date)
-		if spaces < 0 {
-			spaces = 0
-		}
+		spaces = max(spaces, 0)
 		x := bars[0].Date + strings.Repeat(" ", spaces) + bars[len(bars)-1].Date
-		y := strconv.FormatFloat(t.service.BarsMax, 'f', 2, 64) + strings.Repeat("\n", h-1) + strconv.FormatFloat(t.service.BarsMin, 'f', 2, 64)
+		y := strconv.FormatFloat(t.service.BarsMax, 'f', 2, 64) +
+			strings.Repeat("\n", h-1) +
+			strconv.FormatFloat(t.service.BarsMin, 'f', 2, 64)
 		content = lipgloss.JoinHorizontal(lipgloss.Top, y, lipgloss.JoinVertical(lipgloss.Left, chartView, x))
 	}
 	return content
@@ -395,7 +370,7 @@ func (t *TUI) renderAlgosContent() string {
 
 func (t *TUI) renderLogsContent() string {
 	var err error
-	content := ""
+	var content string
 	if t.logFollow {
 		t.logCursor, err = typewriter.GetFileSize(t.logFile)
 		if err != nil {

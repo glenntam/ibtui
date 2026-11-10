@@ -25,7 +25,7 @@ func (b *ZerologToSlogBridge) Write(p []byte) (int, error) {
 		return len(p), ErrNilSlogger
 	}
 	// Parse the zerolog JSON output
-	var logEntry map[string]interface{}
+	var logEntry map[string]any
 	err := json.Unmarshal(p, &logEntry)
 	if err != nil { // If not JSON, just log as info with raw content
 		return len(p), fmt.Errorf("couldn't unmarshal zerolog message (%v): %w", strings.TrimSpace(string(p)), err)
